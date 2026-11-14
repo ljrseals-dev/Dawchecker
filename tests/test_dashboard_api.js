@@ -11,7 +11,11 @@ const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g), match
 assert.equal(scripts.length, 2, 'dashboard scripts remain separate and ordered');
 
 const elements = new Map();
+const knownElementIds = new Set(Array.from(html.matchAll(/\\bid="([^"]+)"/g), match => match[1]));
 function getElementById(id) {
+  if (!knownElementIds.has(id)) {
+    throw new Error('Dashboard references missing DOM id: ' + id);
+  }
   if (!elements.has(id)) {
     elements.set(id, {
       id,
