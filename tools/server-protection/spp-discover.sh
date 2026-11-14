@@ -146,7 +146,6 @@ fi
 
 record RULES_PRESENT_NFT "$NFT_RULES_PRESENT"
 record RULES_PRESENT_IPTABLES "$IPTABLES_RULES_PRESENT"
-record MANAGER_OWNERSHIP_CONFIRMED no
 
 owners=0
 owner_name=""
@@ -191,8 +190,13 @@ if [ "$DUAL_BACKEND_CONFLICT" = yes ] || [ "$owners" -gt 1 ] || [ "$active_parti
     CONFIDENCE=unknown
 elif [ "$owners" -eq 1 ]; then
     MANAGER="$owner_name"
-    OWNERSHIP=confirmed
-    CONFIDENCE=confirmed
+    if [ -n "$active_partial" ]; then
+        OWNERSHIP=owner-confirmed-other-manager-active
+        CONFIDENCE=partial
+    else
+        OWNERSHIP=confirmed
+        CONFIDENCE=confirmed
+    fi
 elif [ -n "$active_partial" ]; then
     MANAGER="$active_partial"
     OWNERSHIP=unproven
@@ -223,6 +227,8 @@ fi
 record FIREWALL_MANAGER "$MANAGER"
 record FIREWALL_BACKEND "$BACKEND"
 record OWNERSHIP "$OWNERSHIP"
+if [ "$OWNERSHIP" = confirmed ]; then record MANAGER_OWNERSHIP_CONFIRMED yes
+else record MANAGER_OWNERSHIP_CONFIRMED no; fi
 record CONFIDENCE "$CONFIDENCE"
 record DUAL_BACKEND_CONFLICT "$DUAL_BACKEND_CONFLICT"
 
