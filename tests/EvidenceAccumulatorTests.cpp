@@ -21,6 +21,8 @@ int main() {
     accumulator.accumulateEvidenceScores();
 
     const std::string report = accumulator.generateForensicNarrative();
+    const std::string repeatedReport = accumulator.generateForensicNarrative();
+    check(report == repeatedReport, "repeated score accumulation is deterministic and idempotent");
     check(report.find("FORENSIC EVIDENCE SUMMARY") != std::string::npos,
           "report identifies itself as an evidence summary");
     check(report.find("Score:") != std::string::npos,
