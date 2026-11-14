@@ -153,7 +153,8 @@ fi
 test ! -e "$TMP/csf-mismatch-ran"
 
 CSF_TEST_MARKER="$TMP/csf-valid-ran" CSF_TEST_MOCKBIN="$TMP/csf-mockbin" \
-  CSF_TEST_ARCHIVE="$TMP/csf.tgz" CSF_SHA256="$CSF_EXPECTED" \
+  CSF_TEST_ARCHIVE="$TMP/csf.tgz" \
+  CSF_SHA256="$(printf '%s' "$CSF_EXPECTED" | tr '[:lower:]' '[:upper:]')" \
   PATH="$TMP/mockbin:$TMP/csf-mockbin:/usr/bin:/bin" SPP_INSTALLER_LIB_ONLY=1 \
   /bin/bash -c 'source "$1"; install_csf' _ "$INSTALLER"
 test -f "$TMP/csf-valid-ran"
