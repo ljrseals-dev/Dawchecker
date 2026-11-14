@@ -229,13 +229,13 @@ The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 - Bounded SPSC event queue; evidence-graph allocations are moved to a non-audio worker
 - Mono pass-through, stereo processing, and safe fallback for mismatched or null channel buffers
 - Persistent bounded 80 Hz phase accumulator; phase advances independently of tone audibility
-- SHA-256 digest through the shared OpenSSL EVP implementation (`dawchecker_crypto`)
+- SHA-256 is provided by the separate `dawchecker_crypto` target; this plugin translation unit does not currently expose a hashing operation
 - No digital-signature generation or signer-identity claim; a digest alone does not prove provenance
 - Parameters: sensitivity, fusion threshold, anti-forensic gate
 
 **Factory:** class registration and UID are declared in the translation unit. This metadata has not been validated by an SDK-backed build.
 
-**Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_crypto` / `OpenSSL::Crypto`, and pass an SDK-backed build before VST3 integration is release-verified.
+**Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_core` and the appropriate Steinberg SDK targets, and pass an SDK-backed build before VST3 integration is release-verified. Link `dawchecker_crypto` only if a future plugin interface actually uses the hash API.
 
 ---
 
