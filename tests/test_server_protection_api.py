@@ -159,12 +159,21 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
     def test_status_uses_csf_deny_count_without_fabricated_risk_score(self):
         with patch.object(api, "require_csf"), \
              patch.object(api, "ipset_entry_counts", return_value={"BITWIRE_IN": 999}), \
-             patch.object(api, "read_csf_file", return_value=["192.0.2.1", "192.0.2.2"]), \
+             patch.object(api, "count_csf_file_entries", return_value=2), \
              patch.object(api, "is_root", return_value=True):
             payload = api.status_payload()
         self.assertEqual(payload["blocked"], 2)
         self.assertNotIn("score", payload)
         self.assertNotIn("score_label", payload)
+
+    def test_csf_deny_count_streams_beyond_ban_list_limit(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            deny_file = Path(temp_dir) / "csf.deny"
+            with deny_file.open("w", encoding="utf-8") as handle:
+                handle.write("# header\\n\\n")
+                for index in range(100_005):
+                    handle.write(f"192.0.2.{index}\\n")
+            self.assertEqual(api.count_csf_file_entries(str(deny_file)), 100_005)
 
     def test_panic_reports_partial_failure(self):
         with patch.object(api, "guard_mutation"), \
