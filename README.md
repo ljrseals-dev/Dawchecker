@@ -2,7 +2,7 @@
 
 ## Project status
 
-DawChecker contains a C++20 audio-analysis core, an optional desktop GUI, SHA-256 hashing support, and VST3 source files.
+DawChecker contains a C++20 audio-analysis core, an optional desktop GUI, SHA-256 hashing support, and source for a VST3 plugin component.
 
 **Verification boundary:** the standalone core and its CTest suite are built in CI. The VST3 translation unit is not part of the current CMake build because the Steinberg VST3 SDK consumer target has not been added. The VST3 integration is therefore not build-verified or release-ready.
 
