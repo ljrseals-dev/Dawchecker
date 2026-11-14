@@ -517,7 +517,6 @@ async function api(path, opts = {}) {
     const err = (data && data.error) || ('HTTP ' + r.status);
     throw new Error(err);
   }
-  apiLive = true;
   return data;
 }
 
@@ -532,8 +531,9 @@ async function refreshFromApi() {
   try {
     const d = await api('/status');
     const blockedValue = Number(d.blocked);
-    totalBlocked = Number.isFinite(blockedValue) ? Math.max(0, Math.floor(blockedValue)) : 0;
-    const countLabel = Number(totalBlocked).toLocaleString();
+    totalBlocked = Number.isFinite(blockedValue) && Number.isInteger(blockedValue) && blockedValue >= 0
+      ? blockedValue : null;
+    const countLabel = Number.isFinite(totalBlocked) ? totalBlocked.toLocaleString() : '—';
     const countEl = document.getElementById('scoreNum');
     const labelEl = document.getElementById('scoreSt');
     const metaBlocked = document.getElementById('metaBlocked');
@@ -541,12 +541,10 @@ async function refreshFromApi() {
     if (labelEl) labelEl.textContent = 'CSF DENY ENTRIES';
     if (metaBlocked) metaBlocked.textContent = 'Count from /etc/csf/csf.deny';
     const apiStatusValue = document.getElementById('apiStatusValue');
-    if (apiStatusValue) apiStatusValue.textContent = 'LIVE';
     const bw = document.getElementById('bwCount');
     const ip = document.getElementById('ipCount');
     if (bw) bw.textContent = Number(d.bitwire_estimate || 0).toLocaleString();
     if (ip) ip.textContent = Number(d.ipsum_estimate || 0).toLocaleString();
-    setFooter(d.root ? 'live · root' : 'live · read-only (need root for mutations)');
 
     const bans = await api('/bans');
     const banItems = Array.isArray(bans.bans) ? bans.bans : [];
@@ -569,8 +567,23 @@ async function refreshFromApi() {
                   'clamStatus', 'clamLast', 'clamExit');
     renderJobCard(jobResponse.jobs && jobResponse.jobs.rkhunter,
                   'rkhStatus', 'rkhLast', 'rkhExit');
+    apiLive = true;
+    apiLoaded = true;
+    if (apiStatusValue) apiStatusValue.textContent = 'LIVE';
+    updateDenyCount();
+    renderBans();
+    renderWL();
+    setFooter(d.root ? 'live · root' : 'live · read-only (need root for mutations)');
   } catch (e) {
     apiLive = false;
+    apiLoaded = true;
+    const apiStatusValue = document.getElementById('apiStatusValue');
+    if (apiStatusValue) apiStatusValue.textContent = 'UNAVAILABLE';
+    const wlStatus = document.getElementById('wlStatus');
+    if (wlStatus) wlStatus.textContent = 'API offline; whitelist state unknown';
+    updateDenyCount();
+    renderBans();
+    renderWL();
     setFooter('API error: ' + e.message);
     addLog('[api] ' + e.message);
   }
