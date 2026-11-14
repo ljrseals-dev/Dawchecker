@@ -156,6 +156,7 @@ Controlled by atomics on `MSV_Engine`; applied inside `process()` when not bypas
 - Ring overflow uses a bounded drop-oldest policy; processing does not allocate or lock.
 - The 16-frame phase-coherence history and FFT working buffers are preallocated.
 - The spectral split is relative to half the Nyquist range, not a fixed-Hz cutoff.
+- `EvidenceAccumulator` uses bounded weighted score blending; it is not a Bayesian model and does not produce posterior probabilities.
 - `audio_pipeline_tests` checks 44.1/48/96 kHz configuration, frame availability, ring wrap/overflow, finite output, and zero heap allocations using a test-only global `operator new` counter.
 - `RealtimeEvidenceQueue` is a bounded SPSC queue. The audio thread only enqueues fixed-size events; the non-audio worker performs evidence-graph string/map updates. Full queues drop the newest event rather than block the producer.
 
