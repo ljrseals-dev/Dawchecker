@@ -147,6 +147,7 @@ add_library(dawchecker_core STATIC
     src/core/AudioDeviceManager.cpp
     src/core/CodecScanner.cpp
     src/core/ENFAnalyzer.cpp
+    src/core/EvidenceAccumulator.cpp
     src/core/MSV_Engine.cpp
     src/core/Neutralizers.cpp
     src/core/SecurityHardening.cpp
@@ -298,6 +299,13 @@ add_executable(audio_pipeline_tests
 target_include_directories(audio_pipeline_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(audio_pipeline_tests PRIVATE dawchecker_core)
 add_test(NAME audio_pipeline_tests COMMAND audio_pipeline_tests)
+
+add_executable(evidence_accumulator_tests
+    tests/EvidenceAccumulatorTests.cpp
+)
+target_include_directories(evidence_accumulator_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(evidence_accumulator_tests PRIVATE dawchecker_core)
+add_test(NAME evidence_accumulator_tests COMMAND evidence_accumulator_tests)
 
 # ============================================================================
 # CONVENIENCE TARGETS
