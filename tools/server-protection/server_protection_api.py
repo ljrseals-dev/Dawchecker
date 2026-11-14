@@ -328,8 +328,8 @@ def trigger_panic() -> dict[str, Any]:
     guard_mutation()
     add_log("PANIC invoked")
     results: dict[str, Any] = {}
-    ok, msg = csf_reload()
-    results["csf_reload"] = {"ok": ok, "msg": msg}
+    reload_ok, msg = csf_reload()
+    results["csf_reload"] = {"ok": reload_ok, "msg": msg}
     try:
         results["clamav"] = trigger_clamav()
     except Exception as e:
@@ -342,8 +342,13 @@ def trigger_panic() -> dict[str, Any]:
         results["msv_blocklist"] = trigger_msv_blocklist()
     except Exception as e:
         results["msv_blocklist"] = {"ok": False, "error": str(e)}
-    return {"ok": True, "results": results}
-
+    all_started = all(bool(item.get("ok")) for item in results.values())
+    return {
+        "ok": all_started,
+        "partial": not all_started,
+        "error": None if all_started else "one or more panic actions failed",
+        "results": results,
+    }
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -508,7 +513,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return
 
             if path in ("/api/panic", "/panic"):
-                self._json(200, trigger_panic())
+                result = trigger_panic()
+                self._json(200 if result["ok"] else 500, result)
                 return
 
             if path in ("/api/blocklist/update", "/blocklist/update"):
