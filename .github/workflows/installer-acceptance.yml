@@ -23,4 +23,4 @@ jobs:
       - name: Check shell syntax
         run: bash -n tools/server-protection/install.sh scripts/build_hardened.sh tests/test_installer_contract.sh
       - name: Run installer contract tests
-        run: bash -x tests/test_installer_contract.sh
+        run: bash tests/test_installer_contract.sh
