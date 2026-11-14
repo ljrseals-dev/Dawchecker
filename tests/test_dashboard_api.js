@@ -28,10 +28,7 @@ function getElementById(id) {
 
 let bans = [{
   ip: '203.0.113.10',
-  cc: 'ZZ',
-  org: '<img src=x onerror=alert(1)>',
-  set: 'TEST',
-  hits: 1,
+  source: '<img src=x onerror=alert(1)>',
   active: true
 }];
 let whitelist = [];
@@ -59,6 +56,12 @@ async function fetchMock(url, init) {
   }
   if (pathname === '/api/whitelist' && method === 'GET') {
     return { ok: true, status: 200, json: async () => ({ whitelist }) };
+  }
+  if (pathname === '/api/jobs') {
+    return { ok: true, status: 200, json: async () => ({ jobs: {
+      clamav: { state: 'ok', rc: 0, detail: 'completed', finished: '2026-11-14T08:00:00Z' },
+      rkhunter: { state: 'error', rc: 1, detail: 'scanner returned nonzero', finished: '2026-11-14T08:01:00Z' }
+    } }) };
   }
   if (pathname === '/api/unblock' && method === 'POST') {
     if (failUnblock) {
@@ -105,6 +108,10 @@ async function flush() {
   assert.equal(getElementById('scoreSt').textContent, 'CSF DENY ENTRIES',
     'dashboard does not turn firewall counts into a threat score');
   assert.equal(getElementById('apiStatusValue').textContent, 'LIVE');
+  assert.equal(getElementById('clamStatus').textContent, 'EXIT 0');
+  assert.equal(getElementById('clamExit').textContent, 'exit 0');
+  assert.equal(getElementById('rkhStatus').textContent, 'FAILED');
+  assert.equal(getElementById('rkhExit').textContent, 'exit 1');
   assert.match(getElementById('denyCount').textContent, /12 entries in csf\.deny/,
     'deny count comes from the status endpoint, not the 2000-row list cap');
   assert.match(getElementById('banList').innerHTML, /&lt;img/);
