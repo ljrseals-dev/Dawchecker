@@ -115,7 +115,7 @@ install_csf() {
     return 1
   }
   log "CSF installed after SHA-256 verification"
-
+}
 
 configure_csf() {
   log "Configuring CSF for ipset blocklists..."
