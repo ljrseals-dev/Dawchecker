@@ -178,5 +178,19 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         self.assertEqual(result["results"]["csf_reload"]["ok"], False)
         self.assertFalse(result["results"]["rkhunter"]["ok"])
 
+    def test_bind_host_is_loopback_ipv4_only(self):
+        self.assertEqual(api._validate_bind_host("127.0.0.1"), "127.0.0.1")
+        self.assertEqual(api._validate_bind_host("127.0.0.2"), "127.0.0.2")
+        for host in ("0.0.0.0", "192.0.2.10", "::1", "localhost"):
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                api._validate_bind_host(host)
+
+    def test_configured_port_must_be_valid_tcp_port(self):
+        self.assertEqual(api._validate_port("1"), 1)
+        self.assertEqual(api._validate_port("65535"), 65535)
+        for port in ("0", "65536", "-1", "not-a-port"):
+            with self.subTest(port=port), self.assertRaises(ValueError):
+                api._validate_port(port)
+
 if __name__ == "__main__":
     unittest.main()
