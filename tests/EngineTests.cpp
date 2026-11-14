@@ -112,6 +112,15 @@ int main()
               "MSV_Engine::process performs zero heap allocations after prepare");
     }
 
+    // --- Unsupported sample rates must not alias named ultrasonic bands.
+    {
+        dsp::UltrasonicScanner scanner(32000.0);
+        const auto result = scanner.process(0.5);
+        check(result.status == dsp::DetectorStatus::Idle &&
+              result.confidence == 0.0 && result.locationHz == 0.0,
+              "32 kHz input does not misreport aliased sub-Nyquist bins as ultrasonic");
+    }
+
     // --- Engine sanity: injected 19.2kHz tone should raise the ultrasonic score.
     {
         dsp::MSV_Engine engine(48000.0, 20.0);
