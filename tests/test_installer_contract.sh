@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Regression coverage for missing cron/systemd and cron idempotence.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
