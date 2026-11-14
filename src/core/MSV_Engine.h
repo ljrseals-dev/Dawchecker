@@ -18,6 +18,9 @@
 
 namespace dawchecker::dsp {
 
+static_assert(std::atomic<double>::is_always_lock_free,
+              "MSV_Engine requires lock-free double atomics for real-time snapshots");
+
 struct EngineSnapshot
 {
     double tamperScore = 0.0; // 0..100 aggregate
