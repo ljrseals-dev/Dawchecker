@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <vector>
+#include <stdexcept>
 #if defined(DAWCHECKER_HAVE_CRYPTO)
 #include "core/ForensicHash.h"
 #endif
