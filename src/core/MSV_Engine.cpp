@@ -1,5 +1,6 @@
 #include "MSV_Engine.h"
 #include <algorithm>
+#include <cmath>
 
 namespace dawchecker::dsp {
 
@@ -10,8 +11,8 @@ MSV_Engine::MSV_Engine(double sampleRate, double sensitivity)
 
 void MSV_Engine::prepare(double sampleRate, double sensitivity)
 {
-    sampleRate_  = sampleRate > 0.0 ? sampleRate : 48000.0;
-    sensitivity_ = std::clamp(sensitivity, 1.0, 100.0);
+    sampleRate_  = std::isfinite(sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
+    sensitivity_ = std::isfinite(sensitivity) ? std::clamp(sensitivity, 1.0, 100.0) : 5.0;
 
     watermarkDetector_.prepare(sampleRate_, sensitivity_);
     enfAnalyzer_.prepare(sampleRate_);
