@@ -7,6 +7,9 @@
 
 namespace dawchecker::dsp {
 
+static_assert(std::atomic<std::size_t>::is_always_lock_free,
+              "RealtimeEvidenceQueue requires lock-free size_t atomics");
+
 struct RealtimeEvidenceEvent {
     float score = 0.0f;
     std::uint64_t sequence = 0;
