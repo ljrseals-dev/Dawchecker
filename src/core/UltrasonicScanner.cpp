@@ -12,7 +12,7 @@ UltrasonicScanner::UltrasonicScanner(double sampleRate) { prepare(sampleRate); }
 
 void UltrasonicScanner::prepare(double sampleRate)
 {
-    sampleRate_ = sampleRate > 0.0 ? sampleRate : 48000.0;
+    sampleRate_ = std::isfinite(sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
     const double nyquist = sampleRate_ * 0.5;
     for (std::size_t i = 0; i < bins_.size(); ++i)
     {
