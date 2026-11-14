@@ -95,7 +95,11 @@ install_files() {
   cp -f "$SCRIPT_DIR/run_dashboard.sh" "$OPT_DIR/"
   cp -f "$SCRIPT_DIR/scripts/"*.sh "$OPT_DIR/scripts/"
   cp -f "$SCRIPT_DIR/dashboard/index.html" "$OPT_DIR/dashboard/"
-  cp -f "$SCRIPT_DIR/systemd/server-protection.service" "$OPT_DIR/systemd/"
+  if [[ -f "$SCRIPT_DIR/systemd/server-protection.service" ]]; then
+    cp -f "$SCRIPT_DIR/systemd/server-protection.service" "$OPT_DIR/systemd/"
+  else
+    warn "systemd unit is absent from the package; service setup will be skipped"
+  fi
   cp -f "$SCRIPT_DIR/README.md" "$OPT_DIR/" 2>/dev/null || true
 
   chmod 755 "$OPT_DIR/server_protection_api.py"
