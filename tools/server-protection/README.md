@@ -148,19 +148,23 @@ sudo SPP_SNAPSHOT_DIR=/var/tmp/spp-discovery \\
 ```
 
 Set `SPP_USE_LOGGER=1` only when an explicit syslog/journal summary is wanted.
-The timestamped snapshot contains the actual output of each successful probe,
-a `RESULT` file, per-probe success/failure fields, and a SHA-256 manifest.
-Unavailable probes are recorded; an empty successful output is not silently
-reported as a captured ruleset.
+The timestamped snapshot contains the actual output of each non-empty
+successful probe, a `RESULT` file, per-probe success/failure fields, and a
+SHA-256 manifest. Empty output is recorded as `empty-output`, not as captured
+rules. Snapshot directories are created owner-only and an existing timestamped
+directory is never overwritten.
 
 ### Interpretation and fail-closed behavior
 
 The `RESULT` includes separate `RULES_PRESENT_NFT` and
 `RULES_PRESENT_IPTABLES` fields. Rule presence is not treated as proof of
-manager ownership. A managed frontend requires an active service plus its
-manager-specific runtime evidence; standalone nftables/iptables requires its
-own active systemd service and a non-empty ruleset. A Docker/CrowdSec table or
-chain by itself is not enough.
+manager ownership. firewalld requires an active service plus its manager
+signature. UFW uses `ufw status` plus its rule signature; it does not require a
+systemd unit because common UFW deployments have no persistent daemon.
+Standalone nftables/iptables requires its own active systemd service and
+non-third-party rules. Docker/CrowdSec-only rules do not establish ownership,
+even when a standalone service is active. The OS release file is parsed as
+data, never sourced as shell code.
 
 | Exit | Confidence | Meaning |
 |---:|---|---|
