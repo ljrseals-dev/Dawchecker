@@ -150,6 +150,7 @@ add_library(dawchecker_core STATIC
     src/core/MSV_Engine.cpp
     src/core/Neutralizers.cpp
     src/core/SecurityHardening.cpp
+    src/core/SharedFeaturePipeline.cpp
     src/core/UltrasonicScanner.cpp
     src/core/WatermarkDetector.cpp
 )
@@ -290,6 +291,13 @@ else()
 endif()
 
 add_test(NAME engine_tests COMMAND engine_tests)
+
+add_executable(audio_pipeline_tests
+    tests/SharedFeaturePipelineTests.cpp
+)
+target_include_directories(audio_pipeline_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(audio_pipeline_tests PRIVATE dawchecker_core)
+add_test(NAME audio_pipeline_tests COMMAND audio_pipeline_tests)
 
 # ============================================================================
 # CONVENIENCE TARGETS
