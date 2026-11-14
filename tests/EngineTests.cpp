@@ -117,8 +117,12 @@ int main()
               "SHA-256 abc vector matches FIPS 180-4");
     }
 
-    // --- Independent 1000-byte all-zero vector computed with OpenSSL CLI:
-    // head -c 1000 /dev/zero | openssl dgst -sha256
+    // --- Independent 1000-byte all-zero vector, computed on 2026-11-14
+    // with OpenSSL 3.5.5 (separate CLI process, not this project's EVP code):
+    //   head -c 1000 /dev/zero | openssl dgst -sha256
+    // DO NOT regenerate this expected value from dawchecker::forensic::sha256().
+    // If this test fails, investigate the implementation; do not overwrite
+    // the known-answer digest.
     {
         static constexpr std::array<std::uint8_t, 32> k1kExpected = {
             0x54, 0x1b, 0x3e, 0x9d, 0xaa, 0x09, 0xb2, 0x0b,
