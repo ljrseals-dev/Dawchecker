@@ -31,6 +31,7 @@ public:
                                          float anomalyGate) noexcept;
 
     std::size_t bufferedSamples() const noexcept { return buffered_samples_; }
+    double sampleRate() const noexcept { return sample_rate_; }
 
 private:
     void pushSample(float sample) noexcept;
