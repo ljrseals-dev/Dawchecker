@@ -13,7 +13,7 @@ T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 BIN="$T/bin"
 mkdir -p "$BIN" "$T/systemd"
-printf 'ID=testos\nID_LIKE=test\nVERSION_ID=1\nPRETTY_NAME="Test OS 1"\n' >"$T/os-release"
+printf 'ID=testos\nID_LIKE=test\nVERSION_ID=1\nPRETTY_NAME="Test OS 1"\nEVIL=$(touch "$HOME/os-release-executed")\n' >"$T/os-release"
 
 pass=0
 fail=0
@@ -29,7 +29,7 @@ case "$cmd" in
   systemctl)
     case "$3" in
       firewalld) case "$SPP_CASE" in fw-confirmed|fw-partial|dual-backend|fail2ban) exit 0;; esac ;;
-      ufw) case "$SPP_CASE" in ufw-confirmed|manager-conflict|ufw-no-unit) exit 0;; esac ;;
+      ufw) case "$SPP_CASE" in ufw-confirmed|manager-conflict) exit 0;; esac ;;
       nftables) case "$SPP_CASE" in nft-standalone|nft-third-party-active) exit 0;; esac ;;
       netfilter-persistent) case "$SPP_CASE" in iptables-standalone|iptables-third-party-active) exit 0;; esac ;;
       crowdsec) exit 1 ;;
@@ -108,8 +108,9 @@ run_case() {
   printf '%s' "$out"
 }
 
-# A completely empty host is unknown, not silently treated as a usable backend.
+# OS release metadata is parsed as data; command substitutions are never evaluated.
 run_case no-manager none 2 unknown unknown unknown >/dev/null
+[ ! -e "$T/os-release-executed" ] && ok "os-release is not executed" || bad "os-release is not executed" executed safe
 
 # Active firewalld without its signature is partial, not confirmed.
 run_case firewalld-partial fw-partial 1 partial firewalld nftables >/dev/null
