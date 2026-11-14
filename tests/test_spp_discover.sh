@@ -46,7 +46,7 @@ case "$cmd" in
     exit 0 ;;
   iptables)
     [ "$1" = --version ] || exit 1
-    case "$SPP_CASE" in dual-backend|iptables-standalone|ufw-confirmed|manager-conflict) echo "iptables v1.8.9 (legacy)" ;;
+    case "$SPP_CASE" in dual-backend|iptables-standalone|ufw-confirmed|ufw-no-unit|manager-conflict) echo "iptables v1.8.9 (legacy)" ;;
       *) echo "iptables v1.8.9 (nf_tables)" ;;
     esac
     exit 0 ;;
