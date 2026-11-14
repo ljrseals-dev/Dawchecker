@@ -153,8 +153,8 @@ async function flush() {
   assert.equal(getElementById('scoreSt').textContent, 'CSF DENY ENTRIES · STALE');
   assert.match(getElementById('denyCount').textContent, /last API count; API offline/,
     'API outage labels the previous count as stale instead of displaying zero');
-  assert.match(getElementById('banCount').textContent, /cached entries; API offline/,
-    'cached bans are not presented as a live API response');
+  assert.match(getElementById('banList').innerHTML, /203\.0\.113\.11/,
+    'last known ban entries remain visible during an API outage');
 
   apiUnavailable = false;
   omitBlocked = true;
