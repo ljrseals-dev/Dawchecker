@@ -78,7 +78,7 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         # The test server binds only 127.0.0.1 and its explicit allowlist
         # contains only that IPv4 origin. IPv6 loopback is not enabled here.
         status, payload = self.request(
-            "/api/unblock", origin="http://[::1]:8080",
+            "/api/unblock", origin=f"http://[::1]:{self.server.server_port}",
             body={"ip": "192.0.2.1"},
         )
         self.assertEqual(status, 403)
