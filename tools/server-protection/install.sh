@@ -59,7 +59,7 @@ install_pkgs() {
       warn "Unknown OS — install curl wget perl ipset python3 manually"
       ;;
   esac
-
+}
 
 install_csf() {
   if command -v csf >/dev/null 2>&1; then
