@@ -433,8 +433,9 @@ function selectBan(i){
 function quickUnblock(i){selRow=i;selectBan(i);doUnblock();}
 
 function updateDenyCount(){
-  const active=BANS.filter(b=>b.active).length;
-  document.getElementById('denyCount').textContent=active.toLocaleString()+' entries in csf.deny';
+  const count = Number.isFinite(totalBlocked) ? totalBlocked : BANS.length;
+  document.getElementById('denyCount').textContent =
+    count.toLocaleString() + ' entries in csf.deny (API count)';
 }
 
 function switchTab(id,btn){
