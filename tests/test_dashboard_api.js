@@ -101,7 +101,10 @@ async function flush() {
 
 (async () => {
   await flush();
-  assert.equal(getElementById('scoreNum').textContent, '100', 'server score is clamped to 0..100');
+  assert.equal(getElementById('scoreNum').textContent, '12', 'dashboard displays the authoritative CSF deny count');
+  assert.equal(getElementById('scoreSt').textContent, 'CSF DENY ENTRIES',
+    'dashboard does not turn firewall counts into a threat score');
+  assert.equal(getElementById('apiStatusValue').textContent, 'LIVE');
   assert.match(getElementById('banList').innerHTML, /&lt;img/);
   assert.doesNotMatch(getElementById('banList').innerHTML, /<img/);
 
