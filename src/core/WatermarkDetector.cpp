@@ -16,7 +16,9 @@ void WatermarkDetector::prepare(double sampleRate, double sensitivity)
     sensitivity_ = std::clamp(sensitivity, 1.0, 100.0);
     prevRef_ = prevLive_ = prevDelta_ = 0.0;
     smoothedStego_ = 0.0;
-    deltaHistory_.clear();
+    deltaHistory_.fill(0.0);
+    historyWritePos_ = 0;
+    historyCount_ = 0;
 }
 
 DetectorResult WatermarkDetector::process(double liveSample, double referenceSample) noexcept
@@ -36,19 +38,21 @@ DetectorResult WatermarkDetector::process(double liveSample, double referenceSam
     const bool structuredStep = std::abs(delta - prevDelta_) > (0.000001 * sensitivity_);
     prevDelta_ = delta;
 
-    deltaHistory_.push_back(delta);
-    if (deltaHistory_.size() > kHistoryLen)
-        deltaHistory_.pop_front();
+    deltaHistory_[historyWritePos_] = delta;
+    historyWritePos_ = (historyWritePos_ + 1) % kHistoryLen;
+    if (historyCount_ < kHistoryLen) ++historyCount_;
 
     double deltaMean = 0.0;
-    if (!deltaHistory_.empty())
-        deltaMean = std::accumulate(deltaHistory_.begin(), deltaHistory_.end(), 0.0) / static_cast<double>(deltaHistory_.size());
+    for (std::size_t i = 0; i < historyCount_; ++i)
+        deltaMean += deltaHistory_[i];
+    if (historyCount_ > 0)
+        deltaMean /= static_cast<double>(historyCount_);
 
     double deltaVariance = 0.0;
-    for (double d : deltaHistory_)
-        deltaVariance += (d - deltaMean) * (d - deltaMean);
-    if (!deltaHistory_.empty())
-        deltaVariance /= static_cast<double>(deltaHistory_.size());
+    for (std::size_t i = 0; i < historyCount_; ++i)
+        deltaVariance += (deltaHistory_[i] - deltaMean) * (deltaHistory_[i] - deltaMean);
+    if (historyCount_ > 0)
+        deltaVariance /= static_cast<double>(historyCount_);
 
     // Low variance + nonzero mean delta over a long window is the signature
     // of a persistent, low-amplitude additive watermark rather than transient
