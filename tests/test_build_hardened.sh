@@ -13,6 +13,7 @@ cat > "$MOCKBIN/cmake" <<'SH'
 set -euo pipefail
 if [[ "$1" == "-B" ]]; then
   mkdir -p "$2"
+  if [[ "${CONFIGURE_FAIL:-0}" == "1" ]]; then exit 8; fi
   exit 0
 fi
 if [[ "$1" == "--build" ]]; then
@@ -77,6 +78,25 @@ if (cd "$failed_build_project" && PATH="$MOCKBIN:$PATH" BUILD_FAIL=1 TEST_COUNT=
   exit 1
 fi
 test ! -e "$failed_build_project/build/dawchecker_secure.sha256"
+
+vendor_fail_project="$(prepare_project vendor-fail)"
+cat > "$vendor_fail_project/scripts/vendor_imgui.sh" <<'SH'
+#!/usr/bin/env bash
+exit 7
+SH
+chmod +x "$vendor_fail_project/scripts/vendor_imgui.sh"
+if (cd "$vendor_fail_project" && PATH="$MOCKBIN:$PATH" ./scripts/build_hardened.sh); then
+  echo "failing dependency vendoring unexpectedly succeeded" >&2
+  exit 1
+fi
+test ! -e "$vendor_fail_project/build/dawchecker_secure.sha256"
+
+configure_fail_project="$(prepare_project configure-fail)"
+if (cd "$configure_fail_project" && PATH="$MOCKBIN:$PATH" CONFIGURE_FAIL=1 ./scripts/build_hardened.sh); then
+  echo "failing CMake configuration unexpectedly succeeded" >&2
+  exit 1
+fi
+test ! -e "$configure_fail_project/build/dawchecker_secure.sha256"
 
 success_project="$(prepare_project successful-build)"
 (cd "$success_project" && PATH="$MOCKBIN:$PATH" TEST_COUNT=2 CTEST_EXIT=0 ./scripts/build_hardened.sh)
