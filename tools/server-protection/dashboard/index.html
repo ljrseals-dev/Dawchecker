@@ -529,9 +529,8 @@ function setFooter(msg) {
 async function refreshFromApi() {
   try {
     const d = await api('/status');
-    const blockedValue = Number(d.blocked);
-    totalBlocked = Number.isFinite(blockedValue) && Number.isInteger(blockedValue) && blockedValue >= 0
-      ? blockedValue : null;
+    totalBlocked = Number.isSafeInteger(d.blocked) && d.blocked >= 0
+      ? d.blocked : null;
     const countLabel = Number.isFinite(totalBlocked) ? totalBlocked.toLocaleString() : '—';
     const countEl = document.getElementById('scoreNum');
     const labelEl = document.getElementById('scoreSt');
