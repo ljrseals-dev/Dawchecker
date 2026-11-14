@@ -99,7 +99,8 @@ async function main() {
     await page.goto('http://127.0.0.1:' + address.port + '/');
     await page.waitForFunction(() =>
       document.getElementById('scoreNum') &&
-      document.getElementById('scoreNum').textContent === '12'
+      document.getElementById('scoreNum').textContent === '12' &&
+      document.getElementById('clamStatus').textContent === 'EXIT 0'
     );
 
     assert.equal(await page.locator('#scoreNum').textContent(), '12');
