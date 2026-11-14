@@ -26,6 +26,7 @@
 
 #include "core/ForensicHash.h"
 #include "core/SharedFeaturePipeline.h"
+#include "core/RealtimeEvidenceQueue.h"
 
 // VST3 SDK Core Structural Includes
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
@@ -41,6 +42,8 @@ namespace DawCheckerSecureUltimate {
 
 using dawchecker::dsp::FrameAnalysisResult;
 using dawchecker::dsp::SharedFeaturePipeline;
+using dawchecker::dsp::RealtimeEvidenceEvent;
+using dawchecker::dsp::RealtimeEvidenceQueue;
 
 // Unique identifier for the monolithic plugin class factory
 static const FUID kDawCheckerMonolithUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
@@ -223,43 +226,6 @@ public:
     }
 };
 
-
-struct RealtimeEvidenceEvent {
-    float probability = 0.0f;
-    std::uint64_t sequence = 0;
-};
-
-class RealtimeEvidenceQueue final {
-public:
-    static constexpr std::size_t kCapacity = 64;
-
-    bool push(const RealtimeEvidenceEvent& event) noexcept {
-        const std::size_t write = write_index_.load(std::memory_order_relaxed);
-        const std::size_t next = (write + 1) % kCapacity;
-        if (next == read_index_.load(std::memory_order_acquire)) return false;
-        events_[write] = event;
-        write_index_.store(next, std::memory_order_release);
-        return true;
-    }
-
-    bool pop(RealtimeEvidenceEvent& event) noexcept {
-        const std::size_t read = read_index_.load(std::memory_order_relaxed);
-        if (read == write_index_.load(std::memory_order_acquire)) return false;
-        event = events_[read];
-        read_index_.store((read + 1) % kCapacity, std::memory_order_release);
-        return true;
-    }
-
-    bool hasPending() const noexcept {
-        return read_index_.load(std::memory_order_acquire) !=
-               write_index_.load(std::memory_order_acquire);
-    }
-
-private:
-    std::array<RealtimeEvidenceEvent, kCapacity> events_{};
-    alignas(64) std::atomic<std::size_t> read_index_{0};
-    alignas(64) std::atomic<std::size_t> write_index_{0};
-};
 
 // ============================================================================
 // 7. VST3 INTEGRATION COMPONENT IMPLEMENTATION
