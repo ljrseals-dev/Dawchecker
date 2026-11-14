@@ -147,10 +147,8 @@ def ipset_entry_counts() -> dict[str, int]:
 
 
 def blocked_total() -> int:
-    counts = ipset_entry_counts()
-    if counts:
-        return min(sum(counts.values()), 2_000_000)
-    # Fallback: lines in csf.deny
+    # Count the authoritative CSF deny file. Summing independent ipset sets
+    # can double-count entries and is not a unique blocked-IP total.
     try:
         return len(read_csf_file("/etc/csf/csf.deny", 100_000))
     except OSError:
@@ -200,7 +198,7 @@ def _job_status_snapshot() -> dict[str, dict[str, Any]]:
 def status_payload() -> dict[str, Any]:
     require_csf()
     counts = ipset_entry_counts()
-    blocked = min(sum(counts.values()), 2_000_000) if counts else blocked_total()
+    blocked = blocked_total()
     # Prefer named MSV sets if present
     bitwire = 0
     ipsum = 0
@@ -210,20 +208,12 @@ def status_payload() -> dict[str, Any]:
             bitwire += n
         if "IPSUM" in u:
             ipsum += n
-    score = min(100, int(blocked / 200)) if blocked else 0
     return {
         "ok": True,
         "ts": _now(),
         "csf": True,
         "root": is_root(),
         "blocked": blocked,
-        "score": score,
-        "score_label": (
-            "CRITICAL" if score >= 80 else
-            "ELEVATED" if score >= 50 else
-            "MODERATE" if score >= 20 else
-            "LOW"
-        ),
         "ipset_sets": counts,
         "bitwire_estimate": bitwire,
         "ipsum_estimate": ipsum,
