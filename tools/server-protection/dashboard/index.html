@@ -596,8 +596,8 @@ startScan = async function () {
           if (btn) { btn.textContent = '▶ RUN CLAMAV SCAN'; btn.classList.remove('scanning'); }
           const st = document.getElementById('clamStatus');
           if (st) {
-            st.textContent = j.state === 'ok' ? 'CLEAN' : 'ALERT';
-            st.className = j.state === 'ok' ? 'av-badge av-ok' : 'av-badge av-crit';
+            st.textContent = j.state === 'ok' ? 'EXIT 0' : 'FAILED';
+            st.className = j.state === 'ok' ? 'av-badge av-unk' : 'av-badge av-crit';
           }
           addLog('[clamav] ' + (j.detail || j.state));
         }
@@ -629,8 +629,8 @@ startRkh = async function () {
           if (btn) { btn.textContent = '▶ RUN RKHUNTER CHECK'; btn.classList.remove('scanning'); }
           const st = document.getElementById('rkhStatus');
           if (st) {
-            st.textContent = j.state === 'ok' ? 'CLEAN' : 'WARN';
-            st.className = j.state === 'ok' ? 'av-badge av-ok' : 'av-badge av-warn';
+            st.textContent = j.state === 'ok' ? 'EXIT 0' : 'FAILED';
+            st.className = j.state === 'ok' ? 'av-badge av-unk' : 'av-badge av-warn';
           }
           addLog('[rkhunter] ' + (j.detail || j.state));
         }
@@ -651,8 +651,8 @@ doPanic = async function () {
     addLog('[api] PANIC');
     await api('/panic', { method: 'POST', body: {} });
     const b = document.getElementById('panicBtn');
-    if (b) { b.textContent = 'NEUTRALIZED'; b.classList.add('ok'); }
-    setFooter('PANIC ACTIVE');
+    if (b) { b.textContent = 'DISPATCHED'; b.classList.add('ok'); }
+    setFooter('PANIC ACTIONS COMPLETE');
     addLog('[panic] dispatched');
     setTimeout(async () => {
       panicked = false;
