@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALLER="$ROOT/tools/server-protection/install.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -25,7 +25,7 @@ chmod +x "$TMP/empty/cat"
 
 # Missing cron and systemd tools must be a warning-only, successful path.
 missing_output="$(
-  PATH="$TMP/empty" SPP_INSTALLER_LIB_ONLY=1 bash -c '
+  PATH="$TMP/empty" SPP_INSTALLER_LIB_ONLY=1 /bin/bash -c '
     source "$1"
     setup_cron
     setup_systemd
@@ -39,7 +39,7 @@ cat > "$TMP/mockbin/crontab" <<'SH'
 #!/bin/sh
 case "$1" in
   -l)
-    if [ "\${CRON_HAS_ENTRY:-0}" = "1" ]; then
+    if [ "${CRON_HAS_ENTRY:-0}" = "1" ]; then
       echo '0 */2 * * * /usr/local/bin/msv-blocklist-update.sh'
       exit 0
     fi
@@ -56,13 +56,13 @@ SH
 chmod +x "$TMP/mockbin/crontab"
 
 CRON_CAPTURE="$TMP/cron.new" CRON_HAS_ENTRY=0 PATH="$TMP/mockbin:$TMP/empty" \
-  SPP_INSTALLER_LIB_ONLY=1 bash -c 'source "$1"; setup_cron' _ "$INSTALLER"
+  SPP_INSTALLER_LIB_ONLY=1 /bin/bash -c 'source "$1"; setup_cron' _ "$INSTALLER"
 grep -q '^0 \*/2 \* \* \* /usr/local/bin/msv-blocklist-update.sh ' "$TMP/cron.new"
 
 # Existing entries must not be duplicated or rewritten.
 rm -f "$TMP/cron.duplicate"
 CRON_CAPTURE="$TMP/cron.duplicate" CRON_HAS_ENTRY=1 PATH="$TMP/mockbin:$TMP/empty" \
-  SPP_INSTALLER_LIB_ONLY=1 bash -c 'source "$1"; setup_cron' _ "$INSTALLER"
+  SPP_INSTALLER_LIB_ONLY=1 /bin/bash -c 'source "$1"; setup_cron' _ "$INSTALLER"
 test ! -e "$TMP/cron.duplicate"
 
 # The executable installer must still reject non-root execution.
