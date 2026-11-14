@@ -353,6 +353,8 @@ body{
 
 <script>
 let totalBlocked=null,selIP='',selRow=-1,panicked=false,wlSelRow=-1;
+let apiLive = false;
+let apiLoaded = false;
 let scanRunning=false,rkhRunning=false;
 
 const BANS = [];
@@ -501,9 +503,6 @@ addLog('Dashboard loaded; awaiting server API data.');
 <script>
 // Production API client — real CSF data only, no demo callbacks
 const API_BASE = (location.protocol === 'file:' ? 'http://127.0.0.1:8080' : '') + '/api';
-let apiLive = false;
-let apiLoaded = false;
-
 async function api(path, opts = {}) {
   const init = {
     method: opts.method || 'GET',
