@@ -4,7 +4,7 @@
  * ============================================================================
  * This file contains the complete code for the DawChecker Secure Ultimate platform.
  * It integrates real-time DSP, shared feature extraction pipelines, a 
- * Bayesian evidence graph, cryptographic sealing, and structural container scanners.
+ * Bayesian evidence graph, SHA-256 hashing (not digital signing), and structural container scanners.
  * * Standards Compliance: C++20 standard, strict compilation hardening, zero stubs.
  * ============================================================================
  */
@@ -22,8 +22,11 @@
 #include <cstdint>
 #include <chrono>
 
+#include "core/ForensicHash.h"
+
 // VST3 SDK Core Structural Includes
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
+#include "public.sdk/source/main/pluginfactory.h"   // defines DEF_CLASS2/END_FACTORY/gPluginFactory
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/base/ustring.h"
@@ -235,6 +238,8 @@ private:
     double sample_rate_;
     size_t fft_size_;
     size_t hop_size_;
+    size_t write_pos_;
+    size_t read_pos_;
     std::vector<float> input_buffer_;
     std::vector<float> fft_window_;
     std::vector<float> prev_phases_;
@@ -262,80 +267,24 @@ private:
 };
 
 // ============================================================================
-// 5. SECURE CRYPTOGRAPHIC SEALING ENGINE & DETERMINISTIC CBOR PACKER
+// 5. FORENSIC HASHING — SHA-256 ONLY (NO DIGITAL SIGNATURE)
 // ============================================================================
 
 struct ForensicManifest {
     std::string case_id;
-    uint64_t timestamp;
-    std::vector<uint8_t> SHA256_hash;
+    std::uint64_t timestamp;
+    std::vector<std::uint8_t> sha256_hash;
     std::string log_narrative;
 };
 
-class CryptographicSealer {
+// This adapter delegates to the shared EVP implementation in dawchecker_crypto.
+// A SHA-256 digest provides integrity identification; it is not a signature and
+// does not establish signer identity or authenticity.
+class ForensicHasher {
 public:
-    static std::vector<uint8_t> computeSHA256(const std::vector<uint8_t>& input) {
-        // Implementation of a deterministic FIPS 180-4 compliant SHA-256 process loop
-        std::vector<uint8_t> digest(32, 0x00);
-        uint32_t h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
-        uint32_t h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
-        
-        for (size_t i = 0; i < input.size(); ++i) {
-            h0 += input[i] + (h1 ^ h2);
-            h3 = (h3 << 5) | (h3 >> 27);
-            h4 ^= input[i];
-        }
-        
-        for (int i = 0; i < 4; ++i) {
-            digest[i]      = static_cast<uint8_t>((h0 >> (24 - i * 8)) & 0xFF);
-            digest[i + 4]  = static_cast<uint8_t>((h1 >> (24 - i * 8)) & 0xFF);
-            digest[i + 8]  = static_cast<uint8_t>((h2 >> (24 - i * 8)) & 0xFF);
-            digest[i + 12] = static_cast<uint8_t>((h3 >> (24 - i * 8)) & 0xFF);
-        }
-        return digest;
-    }
-
-    std::vector<uint8_t> serializeToCanonicalCBOR(const ForensicManifest& manifest) {
-        std::vector<uint8_t> buffer;
-        buffer.push_back(0xA4); // Map header containing 4 discrete item pairs
-
-        // Case key specification
-        buffer.push_back(0x64);
-        buffer.insert(buffer.end(), {'c', 'a', 's', 'e'});
-        buffer.push_back(static_cast<uint8_t>(0x60 + manifest.case_id.size()));
-        buffer.insert(buffer.end(), manifest.case_id.begin(), manifest.case_id.end());
-
-        // Timestamp specification
-        buffer.push_back(0x64);
-        buffer.insert(buffer.end(), {'t', 'i', 'm', 'e'});
-        buffer.push_back(0x1B);
-        for (int i = 7; i >= 0; --i) {
-            buffer.push_back(static_cast<uint8_t>((manifest.timestamp >> (i * 8)) & 0xFF));
-        }
-
-        // Hash specification
-        buffer.push_back(0x64);
-        buffer.insert(buffer.end(), {'h', 'a', 's', 'h'});
-        buffer.push_back(static_cast<uint8_t>(0x40 + manifest.SHA256_hash.size()));
-        buffer.insert(buffer.end(), manifest.SHA256_hash.begin(), manifest.SHA256_hash.end());
-
-        // Narrative text block serialization
-        buffer.push_back(0x64);
-        buffer.insert(buffer.end(), {'d', 'a', 't', 'a'});
-        buffer.push_back(0x5F); // Indefinite length stream wrapper
-        buffer.insert(buffer.end(), manifest.log_narrative.begin(), manifest.log_narrative.end());
-        buffer.push_back(0xFF); // Terminating sequence
-        
-        return buffer;
-    }
-
-    std::vector<uint8_t> generateSignatureBlock(const std::vector<uint8_t>& cborData) {
-        std::vector<uint8_t> sig(64, 0xEF);
-        std::vector<uint8_t> internalHash = computeSHA256(cborData);
-        for (size_t i = 0; i < 32 && i < sig.size(); ++i) {
-            sig[i] = internalHash[i] ^ 0x5A;
-        }
-        return sig;
+    static std::vector<std::uint8_t> computeSHA256(
+        const std::vector<std::uint8_t>& input) {
+        return dawchecker::forensic::sha256(input);
     }
 };
 
@@ -375,9 +324,13 @@ public:
 
 class DawCheckerProcessor : public SingleComponentEffect {
 public:
-    DawCheckerProcessor() {
-        this->setControllerClass(kDawCheckerMonolithUID);
-    }
+    DawCheckerProcessor() = default;
+    // Note: setControllerClass() doesn't exist on SingleComponentEffect --
+    // that method is for the split Component/EditController pattern where
+    // processor and controller are two separate classes with two UIDs.
+    // SingleComponentEffect deliberately merges both into one class using
+    // a single class ID (registered once, below, in the factory), so there
+    // is no separate controller class to point to.
 
     static FUnknown* createInstance(void*) {
         return (IAudioProcessor*)new DawCheckerProcessor();
@@ -521,8 +474,8 @@ BEGIN_FACTORY_DEF("TheRealla Audio Forensic Labs",
                PClassInfo::kManyInstances,
                kVstAudioEffectClass,
                "DawChecker Secure Monolith Ultimate",
-               Vst::kDistortion,
-               "Vst3",
+               Vst::kDistributable,          // classFlags (int) -- "kDistortion" was a fabricated constant here
+               Vst::PlugType::kFxAnalyzer,   // subCategories (string) -- "Fx|Analyzer"
                "3.0.0",
                kVstVersionString,
                DawCheckerSecureUltimate::DawCheckerProcessor::createInstance)
