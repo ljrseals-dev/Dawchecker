@@ -240,7 +240,7 @@ body{
       <div class="sect-lbl" style="margin-top:4px">CSF.ALLOW STATUS</div>
       <div style="font-size:8px;color:#00566a;letter-spacing:1px;line-height:1.8" id="wlStatus">Waiting for API data…</div>
       <div class="sect-lbl" style="margin-top:4px">CSF.DENY COUNT</div>
-      <div style="font-size:8px;color:#4a1a2a;letter-spacing:1px" id="denyCount">0 entries in csf.deny</div>
+      <div style="font-size:8px;color:#4a1a2a;letter-spacing:1px" id="denyCount">Awaiting CSF API count</div>
     </div>
 
     <div class="tabs-col">
@@ -375,8 +375,6 @@ function renderBans(){
     const emptyText = !apiLoaded ? 'Awaiting CSF API data'
       : (apiLive ? 'No CSF deny entries returned' : 'CSF API unavailable; ban state unknown');
     list.innerHTML = '<div class="empty">'+escapeHtml(emptyText)+'</div>';
-    document.getElementById('banCount').textContent =
-      apiLive ? '0 returned entries' : 'count unavailable';
     updateDenyCount();
     return;
   }
@@ -393,7 +391,6 @@ function renderBans(){
     </div>`;
   }).join('');
   list.innerHTML=h;
-  document.getElementById('banCount').textContent = BANS.length + (apiLive ? ' returned entries' : ' cached entries; API offline');
   updateDenyCount();
 }
 
@@ -403,8 +400,6 @@ function renderWL(){
     const emptyText = !apiLoaded ? 'Awaiting CSF API data'
       : (apiLive ? 'No CSF allow entries returned' : 'CSF API unavailable; whitelist state unknown');
     list.innerHTML = '<div class="empty">'+escapeHtml(emptyText)+'</div>';
-    document.getElementById('wlCount').textContent =
-      apiLive ? '0 returned entries' : 'count unavailable';
     return;
   }
   let h=WL.map((w,i)=>`<div class="row wl-row-g${wlSelRow===i?' sel':''}" onclick="wlSelRow=${i};renderWL()">
@@ -412,7 +407,6 @@ function renderWL(){
     <span style="font-size:7px;color:#1a3a1a">${escapeHtml(w.type)}</span>
   </div>`).join('');
   list.innerHTML=h;
-  document.getElementById('wlCount').textContent = WL.length + (apiLive ? ' returned entries' : ' cached entries; API offline');
 }
 
 function renderLog(){
