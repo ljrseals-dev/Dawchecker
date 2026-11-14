@@ -338,6 +338,7 @@ if [ -n "${SPP_SNAPSHOT_DIR:-}" ]; then
     SNAP_DIR="${SPP_SNAPSHOT_DIR%/}/$stamp"
     if [ -e "$SNAP_DIR" ] || [ -L "$SNAP_DIR" ]; then
         SNAP_FAIL+=("snapshot-directory:already-exists")
+        SNAP_DIR=""
         record SNAPSHOT_DIR unavailable
     elif mkdir -p "$SNAP_DIR" 2>/dev/null; then
         : >"$SNAP_DIR/SHA256"
