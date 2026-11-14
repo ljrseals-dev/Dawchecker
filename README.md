@@ -4,7 +4,7 @@
 
 DawChecker contains a C++20 audio-analysis core, an optional desktop GUI, SHA-256 hashing support, and source for a VST3 plugin component.
 
-**Verification boundary:** the standalone core and CTest suite run in CI, including an ASan/UBSan build. A separate compile-only target builds the VST3 plugin translation unit against a pinned Steinberg SDK. This does not package a `.vst3` bundle or verify loading and behavior in a VST3 host.
+**Verification boundary:** the standalone core and CTest suite run in CI, including an ASan/UBSan build. A separate compile-only target builds the VST3 plugin translation unit against a pinned Steinberg SDK. This does not package a `.vst3` bundle or verify loading and behavior in a VST3 host. The server API, dashboard, and installer also have separate acceptance workflows. See [docs/VERIFICATION_STATUS.md](docs/VERIFICATION_STATUS.md) for run IDs and remaining limits.
 
 This project does not claim courtroom validation, proof of authenticity, signer authentication, or a calibrated probability of tampering. Its analysis outputs are heuristic signals that require expert interpretation and independent corroboration.
 
