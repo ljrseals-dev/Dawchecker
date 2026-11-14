@@ -1,5 +1,6 @@
 #pragma once
-#include <deque>
+#include <array>
+#include <cstddef>
 #include "DetectorTypes.h"
 
 namespace dawchecker::dsp {
@@ -23,8 +24,10 @@ private:
     double sensitivity_ = 5.0;
     double prevRef_ = 0.0, prevLive_ = 0.0, prevDelta_ = 0.0;
     double smoothedStego_ = 0.0;
-    std::deque<double> deltaHistory_; // short ring buffer for structure analysis
     static constexpr std::size_t kHistoryLen = 256;
+    std::array<double, kHistoryLen> deltaHistory_{};
+    std::size_t historyWritePos_ = 0;
+    std::size_t historyCount_ = 0;
 };
 
 } // namespace dawchecker::dsp
