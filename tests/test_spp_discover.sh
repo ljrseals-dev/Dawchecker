@@ -29,9 +29,9 @@ case "$cmd" in
   systemctl)
     case "$3" in
       firewalld) case "$SPP_CASE" in fw-confirmed|fw-partial|dual-backend|fail2ban) exit 0;; esac ;;
-      ufw) case "$SPP_CASE" in ufw-confirmed|manager-conflict) exit 0;; esac ;;
-      nftables) [ "$SPP_CASE" = nft-standalone ] && exit 0 ;;
-      netfilter-persistent) [ "$SPP_CASE" = iptables-standalone ] && exit 0 ;;
+      ufw) case "$SPP_CASE" in ufw-confirmed|manager-conflict|ufw-no-unit) exit 0;; esac ;;
+      nftables) case "$SPP_CASE" in nft-standalone|nft-third-party-active) exit 0;; esac ;;
+      netfilter-persistent) case "$SPP_CASE" in iptables-standalone|iptables-third-party-active) exit 0;; esac ;;
       crowdsec) exit 1 ;;
     esac
     exit 1 ;;
@@ -40,7 +40,7 @@ case "$cmd" in
     case "$SPP_CASE" in
       fw-confirmed|fail2ban) printf "table inet firewalld {\n chain input {}\n}\n" ;;
       fw-partial|nft-standalone|dual-backend) printf "table inet filter {\n chain input {}\n}\n" ;;
-      third-party-nft) printf "table inet docker {\n chain forward {}\n}\n" ;;
+      third-party-nft|nft-third-party-active) printf "table inet docker {\n chain forward {}\n}\n" ;;
       manager-conflict) printf "table inet firewalld {\n chain input {}\n}\n" ;;
     esac
     exit 0 ;;
@@ -52,13 +52,13 @@ case "$cmd" in
     exit 0 ;;
   iptables-save)
     case "$SPP_CASE" in
-      ufw-confirmed|manager-conflict)
+      ufw-confirmed|ufw-no-unit|manager-conflict)
         printf ":INPUT ACCEPT [0:0]\n:ufw-before-input - [0:0]\n-A INPUT -j ufw-before-input\n" ;;
       iptables-standalone)
         printf ":INPUT ACCEPT [0:0]\n-A INPUT -p tcp --dport 22 -j ACCEPT\n" ;;
       dual-backend)
         printf ":INPUT ACCEPT [0:0]\n-A INPUT -p tcp --dport 22 -j ACCEPT\n" ;;
-      third-party-iptables)
+      third-party-iptables|iptables-third-party-active)
         printf ":DOCKER - [0:0]\n-A FORWARD -j DOCKER\n" ;;
     esac
     exit 0 ;;
@@ -117,8 +117,9 @@ run_case firewalld-partial fw-partial 1 partial firewalld nftables >/dev/null
 # A firewalld-owned table is confirmed even though nft output includes braces.
 run_case firewalld-confirmed fw-confirmed 0 confirmed firewalld nftables >/dev/null
 
-# UFW ownership requires both active status and its chain signature.
+# UFW is commonly active without a systemd unit; status plus rule signature suffices.
 run_case ufw-confirmed ufw-confirmed 0 confirmed ufw iptables-legacy >/dev/null
+run_case ufw-without-systemd ufw-no-unit 0 confirmed ufw iptables-legacy >/dev/null
 
 # Standalone managers require their own active systemd unit plus rules.
 run_case nft-standalone nft-standalone 0 confirmed nftables-standalone nftables >/dev/null
@@ -127,6 +128,9 @@ run_case iptables-standalone iptables-standalone 0 confirmed iptables-standalone
 # Docker-only tables/chains do not establish standalone firewall ownership.
 run_case third-party-nft third-party-nft 2 unknown unknown unknown >/dev/null
 run_case third-party-iptables third-party-iptables 2 unknown unknown unknown >/dev/null
+# An active standalone service plus only third-party rules is partial, not owned.
+run_case active-nft-with-docker nft-third-party-active 1 partial nftables unknown >/dev/null
+run_case active-iptables-with-docker iptables-third-party-active 1 partial iptables unknown >/dev/null
 
 # Independent nft + iptables-legacy rulesets must be reported as conflict.
 out="$(run_case dual-backend dual-backend 2 unknown conflict unknown)"
