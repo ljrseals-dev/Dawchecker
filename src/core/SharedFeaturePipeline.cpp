@@ -23,6 +23,7 @@ SharedFeaturePipeline::SharedFeaturePipeline(double sampleRate) noexcept
 void SharedFeaturePipeline::pushSample(float sample) noexcept {
     // Invalid floating-point samples must not poison every later FFT frame.
     if (!std::isfinite(sample)) sample = 0.0f;
+    sample = std::clamp(sample, -1.0e6f, 1.0e6f);
     input_buffer_[write_pos_] = sample;
     write_pos_ = (write_pos_ + 1) % kInputCapacity;
 
@@ -150,9 +151,8 @@ FrameAnalysisResult SharedFeaturePipeline::processNextFrame(
         sum_coherence / static_cast<float>(history_coherence_.size());
 
     result.phase_coherence = mean_coherence;
-    result.high_freq_anomaly = low_frequency_energy > 0.0f
-        ? high_frequency_energy / low_frequency_energy
-        : 0.0f;
+    result.high_freq_anomaly =
+        calculateHighFrequencyAnomaly(high_frequency_energy, low_frequency_energy);
     result.noise_floor =
         low_frequency_energy / static_cast<float>(kBinCount);
     result.splice_flag =
