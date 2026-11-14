@@ -35,6 +35,9 @@ using namespace Steinberg::Vst;
 
 namespace DawCheckerSecureUltimate {
 
+static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
+              "VST3 evidence counters require lock-free uint64 atomics");
+
 using dawchecker::dsp::FrameAnalysisResult;
 using dawchecker::dsp::SharedFeaturePipeline;
 using dawchecker::dsp::RealtimeEvidenceEvent;
