@@ -1,10 +1,26 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <complex>
 #include <cstddef>
 
 namespace dawchecker::dsp {
+
+inline float calculateHighFrequencyAnomaly(float highFrequencyMagnitude,
+                                           float lowFrequencyMagnitude) noexcept {
+    constexpr float kDenominatorFloor = 1.0e-12f;
+    constexpr float kMaximumRatio = 1.0e6f;
+    if (!std::isfinite(highFrequencyMagnitude) ||
+        !std::isfinite(lowFrequencyMagnitude)) {
+        return kMaximumRatio;
+    }
+    if (highFrequencyMagnitude <= 0.0f) return 0.0f;
+    const float ratio =
+        highFrequencyMagnitude / std::max(lowFrequencyMagnitude, kDenominatorFloor);
+    return std::clamp(ratio, 0.0f, kMaximumRatio);
+}
 
 struct FrameAnalysisResult {
     float phase_coherence = 0.0f;
