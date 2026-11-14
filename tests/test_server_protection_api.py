@@ -33,6 +33,8 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.base = f"http://127.0.0.1:{cls.server.server_port}"
+        cls.origin = cls.base
+        api.ALLOWED_ORIGINS = frozenset({cls.origin})
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -82,7 +84,7 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
 
     def test_non_json_mutation_is_rejected(self):
         status, payload = self.request(
-            "/api/unblock", origin=next(iter(api.ALLOWED_ORIGINS)),
+            "/api/unblock", origin=self.origin,
             content_type="application/x-www-form-urlencoded", body={"ip": "192.0.2.1"},
         )
         self.assertEqual(status, 415)
