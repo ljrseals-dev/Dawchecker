@@ -46,14 +46,9 @@ void EvidenceAccumulator::accumulateEvidenceScores() {
             if (childIt == records_.end()) continue;
             auto& child = childIt->second;
 
-            const float numerator =
-                child.base_score * link.weight * parentScore;
-            const float denominator =
-                (child.base_score * parentScore) +
-                ((1.0f - parentScore) * 0.5f);
-            const float updated = denominator > 0.0f
-                ? numerator / denominator
-                : child.base_score;
+            const float updated =
+                (child.base_score * link.weight) +
+                (parentScore * (1.0f - link.weight));
             child.accumulated_score = std::clamp(updated, 0.0f, 1.0f);
         }
     }
