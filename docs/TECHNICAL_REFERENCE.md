@@ -225,6 +225,8 @@ The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 
 - Shared fixed-storage feature pipeline (512-sample frame, 128-sample hop, bounded 16,384-sample ring)
 - Preallocated radix-2 FFT workspace; no heap allocation in the pipeline write/process methods
+- Non-finite input samples become zero; finite analysis samples are bounded to ±1e6 before FFT arithmetic
+- High/low spectral-magnitude ratio uses a 1e-12 denominator floor and 1e6 cap, so a zero low-band denominator cannot suppress a high-band anomaly
 - Logistic mapping to a bounded heuristic score; not a calibrated probability or posterior
 - Bounded SPSC event queue; evidence-graph allocations are moved to a non-audio worker
 - Mono pass-through, stereo processing, and safe fallback for mismatched or null channel buffers
