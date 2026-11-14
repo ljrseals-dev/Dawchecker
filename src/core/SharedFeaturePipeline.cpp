@@ -21,6 +21,8 @@ SharedFeaturePipeline::SharedFeaturePipeline(double sampleRate) noexcept
 }
 
 void SharedFeaturePipeline::pushSample(float sample) noexcept {
+    // Invalid floating-point samples must not poison every later FFT frame.
+    if (!std::isfinite(sample)) sample = 0.0f;
     input_buffer_[write_pos_] = sample;
     write_pos_ = (write_pos_ + 1) % kInputCapacity;
 
@@ -76,24 +78,52 @@ FrameAnalysisResult SharedFeaturePipeline::processNextFrame(
     read_pos_ = (read_pos_ + kHopSize) % kInputCapacity;
     buffered_samples_ -= kHopSize;
 
+    // Iterative radix-2 Cooley-Tukey FFT. All workspace is fixed-size and
+    // preallocated in the pipeline object; no allocation or lock occurs here.
+    for (std::size_t i = 0; i < kFftSize; ++i) {
+        spectrum_buffer_[i] = {frame_buffer_[i], 0.0f};
+    }
+
+    std::size_t bit_reversed = 0;
+    for (std::size_t i = 1; i < kFftSize; ++i) {
+        std::size_t bit = kFftSize >> 1;
+        while ((bit_reversed & bit) != 0) {
+            bit_reversed ^= bit;
+            bit >>= 1;
+        }
+        bit_reversed ^= bit;
+        if (i < bit_reversed) {
+            std::swap(spectrum_buffer_[i], spectrum_buffer_[bit_reversed]);
+        }
+    }
+
+    for (std::size_t length = 2; length <= kFftSize; length <<= 1) {
+        const float angle = static_cast<float>(
+            -2.0 * kPi / static_cast<double>(length));
+        const std::complex<float> root(std::cos(angle), std::sin(angle));
+        const std::size_t half = length >> 1;
+        for (std::size_t base = 0; base < kFftSize; base += length) {
+            std::complex<float> twiddle(1.0f, 0.0f);
+            for (std::size_t offset = 0; offset < half; ++offset) {
+                const auto even = spectrum_buffer_[base + offset];
+                const auto odd = spectrum_buffer_[base + offset + half] * twiddle;
+                spectrum_buffer_[base + offset] = even + odd;
+                spectrum_buffer_[base + offset + half] = even - odd;
+                twiddle *= root;
+            }
+        }
+    }
+
     float high_frequency_energy = 0.0f;
     float low_frequency_energy = 0.0f;
     float total_phase_difference = 0.0f;
 
+    const float bounded_sensitivity = std::isfinite(sensitivity)
+        ? std::clamp(sensitivity, 0.0f, 1.0f) : 0.0f;
+    const float bounded_anomaly_gate = std::isfinite(anomalyGate)
+        ? std::clamp(anomalyGate, 0.0f, 1.0f) : 0.0f;
+
     for (std::size_t k = 0; k < kBinCount; ++k) {
-        float real_sum = 0.0f;
-        float imaginary_sum = 0.0f;
-        const float angle_factor = static_cast<float>(
-            -2.0 * kPi * static_cast<double>(k) /
-            static_cast<double>(kFftSize));
-
-        for (std::size_t n = 0; n < kFftSize; ++n) {
-            const float angle = angle_factor * static_cast<float>(n);
-            real_sum += frame_buffer_[n] * std::cos(angle);
-            imaginary_sum += frame_buffer_[n] * std::sin(angle);
-        }
-
-        spectrum_buffer_[k] = {real_sum, imaginary_sum};
         const float magnitude = std::abs(spectrum_buffer_[k]);
         const float phase = std::arg(spectrum_buffer_[k]);
 
@@ -126,7 +156,7 @@ FrameAnalysisResult SharedFeaturePipeline::processNextFrame(
     result.noise_floor =
         low_frequency_energy / static_cast<float>(kBinCount);
     result.splice_flag =
-        (result.high_freq_anomaly * sensitivity > anomalyGate) &&
+        (result.high_freq_anomaly * bounded_sensitivity > bounded_anomaly_gate) &&
         (result.phase_coherence < 0.50f);
 
     return result;
