@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <new>
+#include <limits>
 #include <thread>
 
 namespace {
@@ -115,6 +116,36 @@ int main() {
     g_track_allocations.store(false, std::memory_order_release);
     check(g_allocation_count.load(std::memory_order_relaxed) == 0,
           "stereo write and repeated analysis allocate no heap memory");
+
+    SharedFeaturePipeline lowTonePipeline(48000.0);
+    SharedFeaturePipeline highTonePipeline(48000.0);
+    std::array<float, SharedFeaturePipeline::kFftSize> lowTone{};
+    std::array<float, SharedFeaturePipeline::kFftSize> highTone{};
+    constexpr float testPi = 3.14159265358979323846f;
+    for (std::size_t i = 0; i < lowTone.size(); ++i) {
+        const float time = static_cast<float>(i) / 48000.0f;
+        lowTone[i] = std::sin(2.0f * testPi * 1000.0f * time);
+        highTone[i] = std::sin(2.0f * testPi * 18000.0f * time);
+    }
+    lowTonePipeline.writeSamples(lowTone.data(), lowTone.size());
+    highTonePipeline.writeSamples(highTone.data(), highTone.size());
+    const auto lowToneResult = lowTonePipeline.processNextFrame(0.5f, 0.25f);
+    const auto highToneResult = highTonePipeline.processNextFrame(0.5f, 0.25f);
+    check(highToneResult.high_freq_anomaly >
+              lowToneResult.high_freq_anomaly + 0.5f,
+          "radix-2 FFT separates high-band tone energy from low-band tone energy");
+
+    SharedFeaturePipeline invalidInputPipeline(48000.0);
+    std::array<float, SharedFeaturePipeline::kFftSize> invalidInput{};
+    invalidInput[0] = std::numeric_limits<float>::quiet_NaN();
+    invalidInput[1] = std::numeric_limits<float>::infinity();
+    invalidInputPipeline.writeSamples(invalidInput.data(), invalidInput.size());
+    const auto invalidInputResult =
+        invalidInputPipeline.processNextFrame(0.5f, 0.25f);
+    check(std::isfinite(invalidInputResult.phase_coherence) &&
+          std::isfinite(invalidInputResult.high_freq_anomaly) &&
+          std::isfinite(invalidInputResult.noise_floor),
+          "NaN and infinity input samples are sanitized before FFT analysis");
 
     dawchecker::dsp::RealtimeEvidenceQueue queue;
     dawchecker::dsp::RealtimeEvidenceEvent event{};
