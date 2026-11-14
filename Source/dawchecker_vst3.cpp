@@ -353,12 +353,12 @@ public:
         float* out1 = outputChannels > 1 ? outputBus.channelBuffers32[1] : nullptr;
 
         const bool validStereo =
-            inputChannels >= 2 && outputChannels >= 2 &&
+            inputChannels == 2 && outputChannels == 2 &&
             in0 != nullptr && in1 != nullptr &&
             out0 != nullptr && out1 != nullptr;
 
         if (pipeline_ != nullptr && fusion_engine_ != nullptr) {
-            if (validStereo) {
+            if (inputChannels >= 2 && in0 != nullptr && in1 != nullptr) {
                 pipeline_->writeStereoSamples(in0, in1,
                     static_cast<std::size_t>(data.numSamples));
             } else {
@@ -381,8 +381,7 @@ public:
                 out1[i] = in1[i] - trackingTone;
 
                 // Advance phase even when the tracking tone is inaudible.
-                tone_phase_ += tone_phase_increment_;
-                if (tone_phase_ >= twoPi) tone_phase_ -= twoPi;
+                advanceTonePhase();
             }
         } else {
             // Safe fallback for mono, mismatched, or partially-null channel layouts.
@@ -394,12 +393,14 @@ public:
                 const float* source = nullptr;
                 if (inputChannels == 1) {
                     source = in0;
-                } else if (outputChannels == 1 && inputChannels >= 2 &&
-                           in0 != nullptr && in1 != nullptr) {
-                    for (int32 i = 0; i < data.numSamples; ++i) {
-                        output[i] = 0.5f * (in0[i] + in1[i]);
+                } else if (outputChannels == 1 && inputChannels >= 2) {
+                    if (in0 != nullptr && in1 != nullptr) {
+                        for (int32 i = 0; i < data.numSamples; ++i) {
+                            output[i] = 0.5f * (in0[i] + in1[i]);
+                        }
+                        continue;
                     }
-                    continue;
+                    source = in0 != nullptr ? in0 : in1;
                 } else if (channel < inputChannels) {
                     source = inputBus.channelBuffers32[channel];
                 }
@@ -410,6 +411,7 @@ public:
                     for (int32 i = 0; i < data.numSamples; ++i) output[i] = 0.0f;
                 }
             }
+            for (int32 i = 0; i < data.numSamples; ++i) advanceTonePhase();
         }
 
         if (data.outputParameterChanges != nullptr) {
@@ -425,6 +427,12 @@ public:
     }
 
 private:
+    void advanceTonePhase() noexcept {
+        constexpr double twoPi = 6.28318530717958647692;
+        tone_phase_ += tone_phase_increment_;
+        if (tone_phase_ >= twoPi) tone_phase_ = std::fmod(tone_phase_, twoPi);
+    }
+
     void analyzeAvailableFrames() noexcept {
         if (pipeline_ == nullptr || fusion_engine_ == nullptr) return;
         while (pipeline_->isFrameAvailable()) {
