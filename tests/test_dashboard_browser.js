@@ -27,10 +27,7 @@ async function main() {
 
   let bans = [{
     ip: '203.0.113.10',
-    cc: 'ZZ',
-    org: '<img src=x onerror=alert(1)>',
-    set: 'TEST',
-    hits: 1,
+    source: '<img src=x onerror=alert(1)>',
     active: true
   }];
   let whitelist = [];
@@ -130,8 +127,7 @@ async function main() {
     assert.match(unblockCall.headers['content-type'], /application\/json/i);
 
     bans = [{
-      ip: '203.0.113.11', cc: 'ZZ', org: 'API failure test',
-      set: 'TEST', hits: 1, active: true
+      ip: '203.0.113.11', source: 'csf.deny', active: true
     }];
     await page.evaluate(() => refreshFromApi());
     await page.waitForFunction(() =>
