@@ -139,12 +139,12 @@ body{
 .row{display:grid;align-items:center;padding:4px 8px;border-bottom:1px solid #030e18;cursor:pointer;transition:background .15s;font-size:9px}
 .row:hover{background:#041422}
 .row.sel{background:#041c30;border-left:2px solid var(--wave)}
-.ban-row{grid-template-columns:110px 28px 1fr 58px 22px}
+.ban-row{grid-template-columns:minmax(110px,1fr) 90px 58px 22px}
 .wl-row-g{grid-template-columns:1fr 60px}
 .ip{color:var(--coral);letter-spacing:1px}
 .ip.ok{color:var(--wave)}
 .cc{color:var(--text-dim)}
-.org{color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.source{color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{font-size:7px;padding:2px 4px;border-radius:2px;text-align:center;letter-spacing:1px}
 .b-bl{background:#1a0008;color:#882233;border:1px solid #2a0010}
 .b-ub{background:#040e18;color:#1a3a5a;border:1px solid #0a1a2a}
@@ -262,14 +262,14 @@ body{
         <button class="tab on"  onclick="switchTab('ban',this)">BAN LIST</button>
         <button class="tab"     onclick="switchTab('wl',this)">WHITELIST</button>
         <button class="tab"     onclick="switchTab('av',this)">AV / INTEGRITY</button>
-        <button class="tab"     onclick="switchTab('log',this)">EVENT LOG</button>
+        <button class="tab"     onclick="switchTab('log',this)">SESSION LOG</button>
         <button class="tab"     onclick="switchTab('src',this)">SOURCES</button>
       </div>
 
       <!-- BAN LIST -->
       <div class="tab-pane on" id="tab-ban">
-        <div style="display:grid;grid-template-columns:110px 28px 1fr 58px 22px;padding:3px 8px;font-size:7px;color:#1a1a2e;letter-spacing:1px;border-bottom:1px solid #0d0d18">
-          <span>IP ADDRESS</span><span>CC</span><span>ORG</span><span>STATUS</span><span></span>
+        <div style="display:grid;grid-template-columns:minmax(110px,1fr) 90px 58px 22px;padding:3px 8px;font-size:7px;color:#1a1a2e;letter-spacing:1px;border-bottom:1px solid #0d0d18">
+          <span>IP ADDRESS</span><span>SOURCE</span><span>STATUS</span><span></span>
         </div>
         <div class="list-wrap" id="banList"></div>
       </div>
@@ -287,15 +287,15 @@ body{
         <div class="av-wrap">
           <div class="av-card">
             <div class="av-title">CLAMAV JOB <span class="av-badge av-unk" id="clamStatus">UNKNOWN</span></div>
-            <div class="av-row"><span class="av-k">last scan</span><span class="av-v" id="clamLast">—</span></div>
-            <div class="av-row"><span class="av-k">result</span><span class="av-v" id="clamThreats">—</span></div>
+            <div class="av-row"><span class="av-k">finished</span><span class="av-v" id="clamLast">not reported</span></div>
+            <div class="av-row"><span class="av-k">process exit</span><span class="av-v" id="clamExit">not reported</span></div>
             <div class="av-bar-wrap"><div class="av-bar-fill" id="clamProgress" style="width:0%"></div></div>
             <button class="scan-btn" id="scanBtn" onclick="startScan()">▶ RUN CLAMAV SCAN</button>
           </div>
           <div class="av-card">
             <div class="av-title">RKHUNTER JOB <span class="av-badge av-unk" id="rkhStatus">UNKNOWN</span></div>
-            <div class="av-row"><span class="av-k">last check</span><span class="av-v" id="rkhLast">—</span></div>
-            <div class="av-row"><span class="av-k">result</span><span class="av-v" id="rkhWarn">—</span></div>
+            <div class="av-row"><span class="av-k">finished</span><span class="av-v" id="rkhLast">not reported</span></div>
+            <div class="av-row"><span class="av-k">process exit</span><span class="av-v" id="rkhExit">not reported</span></div>
             <button class="scan-btn" id="rkhBtn" onclick="startRkh()">▶ RUN RKHUNTER CHECK</button>
           </div>
           <div class="av-card">
@@ -389,8 +389,7 @@ function renderBans(){
     let ic=e.active?'↑':'·';
     return `<div class="row ban-row${sel?' sel':''}" onclick="selectBan(${i})">
       <span class="ip${e.active?'':' ok'}">${escapeHtml(e.ip)}</span>
-      <span class="cc">${escapeHtml(e.cc)}</span>
-      <span class="org">${escapeHtml(e.org)}</span>
+      <span class="source">${escapeHtml(e.source)}</span>
       <span class="badge ${bc}">${bl}</span>
       <span class="unbl-ico" onclick="event.stopPropagation();quickUnblock(${i})" title="unblock">${ic}</span>
     </div>`;
@@ -422,7 +421,7 @@ function selectBan(i){
   if(!e)return;
   selRow=i;
   selIP=e.ip;
-  let info=e.ip+' ['+e.cc+'] '+e.org;
+  let info=e.ip+' · '+e.source;
   let el=document.getElementById('selInfo');
   el.textContent=info;
   el.style.color=e.active?'#ff2222':'#4444aa';
@@ -505,9 +504,7 @@ async function refreshFromApi() {
     const bans = await api('/bans');
     const banItems = Array.isArray(bans.bans) ? bans.bans : [];
     BANS.splice(0, BANS.length, ...banItems.map(b => ({
-      ip: b.ip, cc: b.cc || '', org: b.org || 'csf.deny', set: b.set || 'CSF_DENY',
-      hits: Number.isFinite(Number(b.hits)) ? Math.max(0, Number(b.hits)) : 0,
-      active: b.active !== false
+      ip: b.ip, source: b.source || 'csf.deny', active: b.active !== false
     })));
     if (selRow >= BANS.length) { selRow = -1; selIP = ''; }
 
