@@ -1,172 +1,96 @@
-# DawChecker Secure Ultimate (VST3 Edition)
+# DawChecker Secure — Audio Analysis Core
 
-## Overview
+## Project status
 
-**DawChecker Secure Ultimate** is a high-fidelity, production-hardened real-time VST3 forensic audio analysis platform. Built specifically for court-defensible digital audio forensics, chain-of-custody preservation, and signal authentication, the system bypasses fragile single-signature heuristics. Instead, it utilizes a multi-layered detection matrix combined via a **Platt-scaled Logistic Evidence Fusion Engine** to quantify tampering probability with absolute mathematical rigor.
+DawChecker contains a C++20 audio-analysis core, an optional desktop GUI, SHA-256 hashing support, and VST3 source files.
 
-This repository hosts the ultra-optimized monolithic compilation target, unifying the real-time Short-Time Fourier Transform (STFT) pipeline, phase coherence analysis, sub-harmonic telemetry reporting, and parameter state management into a single, isolated execution unit.
+**Verification boundary:** the standalone core and its CTest suite are built in CI. The VST3 translation unit is not part of the current CMake build because the Steinberg VST3 SDK consumer target has not been added. The VST3 integration is therefore not build-verified or release-ready.
 
----
+This project does not claim courtroom validation, proof of authenticity, signer authentication, or a calibrated probability of tampering. Its analysis outputs are heuristic signals that require expert interpretation and independent corroboration.
 
-## Architectural Pillars
+## Implemented components
 
-```
-+-----------------------------------------------------------------------------+
-|                                AUDIO RECON                                  |
-|  +---------------------------+     +-------------------------------------+  |
-|  |   Shared STFT Pipeline    | --> | Magnitude-Weighted Phase Coherence  |  |
-|  +---------------------------+     +-------------------------------------+  |
-|                                       |                                     |
-|                                       v                                     |
-|                    +-------------------------------------+                  |
-|                    |  Platt-Scaled Logistic Regression   |                  |
-|                    +-------------------------------------+                  |
-|                                       |                                     |
-|                                       v                                     |
-|  +---------------------------+     +-------------------------------------+  |
-|  | Real-Time Sub-Harmonic   | <-- |   Bayesian Evidence Calibration     |  |
-|  |     Telemetry Output      |     |               Engine                |  |
-|  +---------------------------+     +-------------------------------------+  |
-+-----------------------------------------------------------------------------+
+### 1. Shared feature pipeline
 
-```
+`dawchecker::dsp::SharedFeaturePipeline` provides:
 
-### 1. Shared Feature Pipeline & Hermetic DSP
+- 512-sample analysis frames with a 128-sample hop
+- Preallocated frame, window, spectrum, and phase-history storage
+- A bounded 16,384-sample input ring with a drop-oldest overflow policy
+- No heap allocation in its sample-write and frame-processing methods
+- A relative spectral split at half the Nyquist range, not a fixed-Hz cutoff
 
-The engine runs a localized $O(N^2)$ Discrete Fourier Transform implementation designed to maintain complete runtime isolation. By avoiding external linkage dependencies (such as standard FFTW or Intel IPP libraries), it eliminates side-channel vulnerabilities and potential compilation shifts across target environments.
+The `audio_pipeline_tests` target checks frame availability, overlap behavior, ring wrap/overflow, finite metrics, supported sample-rate configurations, and zero heap allocations using a test-only global allocation counter.
 
-### 2. Magnitude-Weighted Phase Coherence
+### 2. Logistic score mapping
 
-Tracks cross-bin phase velocity variations and instantaneous dispersion. Splices, edits, or deepfake vocoder rendering boundaries introduce non-linear phase randomization; the analyzer flags these micro-discontinuities against a continuous exponential decay tracking window.
+The VST3 source contains a logistic mapping from phase-coherence and high-frequency-anomaly features to a score in the range `[0.0, 1.0]`.
 
-### 3. Platt-Scaled Evidence Fusion
+The current coefficients (`-2.4` and `0.35`) are implementation constants, not a validated calibration dataset. The result is a **heuristic score**, not a calibrated posterior probability, likelihood ratio, or proof of tampering.
 
-Translates structural high-frequency anomalies, noise-floor variations, and phase dispersion into a calibrated posterior probability. Rather than relying on arbitrary cutoff scores, it scales multidimensional features into a strict $[0.0, 1.0]$ probability scale using localized Platt-regression coefficients ($a = -2.4$, $b = 0.35$).
+### 3. Evidence accumulation
 
-### 4. Video PRNU Profiling Extension
+The VST3 source uses `EvidenceAccumulator` to retain weighted evidence records and derive an accumulated score. This is a heuristic score-aggregation structure; it is not Bayesian inference and does not calculate posterior probabilities.
 
-Fully prepared to ingest 2D Photo Response Non-Uniformity matrices. It extracts high-frequency sensor noise residuals via a 2D adaptive Wiener filter mask, allowing developers to correlate audio phase drops with frame-level sensor mismatches for unified video/audio tampering localization.
+A bounded single-producer/single-consumer queue transfers fixed-size evidence events from the audio callback to a non-audio worker. The worker performs string and map updates. If the queue is full, the newest event is dropped rather than blocking the audio thread.
 
----
+### 4. SHA-256 hashing
 
-## Technical Specifications
+`dawchecker_crypto` uses OpenSSL EVP for SHA-256 digests. A digest can identify changed bytes when compared with a trusted reference. It does not create a digital signature, identify a signer, or independently establish provenance.
 
-| Parameter | Specification |
-| --- | --- |
-| **Plugin Format** | VST3 (SingleComponentEffect Architecture) |
-| **C++ Standard** | C++20 |
-| **Default Window Size** | 512 samples (Hann windowing) |
-| **Default Hop Size** | 128 samples (75% overlap) |
-| **Processing Path** | Hardened 32-bit floating-point SIMD-ready buffers |
-| **Output Signalling** | Real-time dual-phase sub-harmonic signaling ($80\text{ Hz}$ at $-34\text{ dBFS}$) |
+## Build and test the standalone core
 
----
-
-## Parameter Mapping Matrix
-
-* **Forensic Sensitivity (`kParamSensitivity`)** `[ID: 0, Range: 0.0 - 1.0]`: Adjusts the scaling multiplier for high-frequency spectral anomaly tracking. Heightens vigilance in low-amplitude or heavily compressed noise floors.
-* **Fusion Model Threshold (`kParamFusionThreshold`)** `[ID: 1, Range: 0.0 - 1.0]`: Sets the critical Platt-scaling logistic limit. Crossing this boundary triggers immediate anomaly logging and activates the defensive telemetry subsystem.
-* **Anti-Forensic Gate (`kParamAntiForensicGate`)** `[ID: 2, Range: 0.0 - 1.0]`: Determines the noise-floor variance tolerance baseline, preventing adversarial noise-injection (dithering masks, spectral painting) from blinding the structural analysis blocks.
-
----
-
-## Compilation & Deployment Hardening
-
-The codebase enforces strict memory security bounds and binary defenses to resist exploitation or reverse-engineering in hostile analytical conditions.
-
-### Compilation Flags & Binary Specifications
-
-#### For Linux / macOS (GCC / Clang):
+Dependencies include a C++20 compiler, CMake, OpenSSL Crypto, Threads, and OpenGL development files. PortAudio is optional.
 
 ```bash
--Wall -Wextra -Werror -fstack-protector-strong -fPIE -D_FORTIFY_SOURCE=2 -O2 -pie -z relro -z now
-
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDAWCHECKER_REQUIRE_CRYPTO=ON
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-* `-fstack-protector-strong`: Implements structural stack canary verification around local buffers.
-* `-fPIE` / `-pie`: Forces Position-Independent Executable generation for full Address Space Layout Randomization (ASLR) compatibility.
-* `-z relro -z now`: Hardens ELF headers, forcing immediate resolution of dynamic symbols to render the Global Offset Table (GOT) strictly read-only.
+The mandatory crypto option must remain enabled for crypto acceptance. The current CI gate rejects a build with zero registered tests.
 
-#### For Windows (MSVC):
-
-```cmd
-/W4 /WX /GS /sdl /guard:cf /analyze /GUARD:CF /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA
-
-```
-
-* `/guard:cf` & `/GUARD:CF`: Compiler and linker-level Control Flow Guard (CFG) verification to arrest indirect call hijacking.
-* `/HIGHENTROPYVA`: Forces the operating system to apply 64-bit high-entropy ASLR for security boundary separation.
-
-### Automated Hardened Build Deployment
-
-To compile the production-ready binary, navigate to the project directory and execute the hardened build toolchain script:
+For the hardened build path:
 
 ```bash
 chmod +x scripts/build_hardened.sh
 ./scripts/build_hardened.sh
-
 ```
 
----
+The hardened script removes stale checksum sidecars before rebuilding, aborts on failed or unregistered tests, and publishes a checksum sidecar only after successful build and tests.
 
-## Verification & Forensic Chain-of-Custody
+## VST3 integration boundary
 
-When integrating into automated legal processing stations or multi-modal forensic engines:
+The VST3 source files are:
 
-1. **Telemetry Capture:** Monitor the plugin’s output bus for inverted phase $80\text{ Hz}$ sub-harmonics during suspicious segments. This allows downstream recording hardware to print an unalterable forensic alarm trace directly into the audio print.
-2. **Graph Injection:** Ensure your parent environment implements `dawchecker::dsp::EvidenceGraph`. Real-time findings append directly into the DAG with immutable weights, preserving the prior probabilities necessary for structural Bayesian courtroom presentation.
+- `Source/dawchecker_vst3.cpp`
+- `latest/dawchecker_vst3.cpp`
 
----
+They contain the processor implementation, the evidence worker, channel-layout handling, and the optional 80 Hz tracking tone. These source changes have **not** been compiled against the Steinberg SDK in CI.
 
+Before treating the VST3 integration as verified, add an SDK-backed CMake consumer target that includes `src/`, links `dawchecker_crypto` and `OpenSSL::Crypto`, and builds against a pinned/available Steinberg VST3 SDK. Until that exists and passes CI, the VST3 integration remains a manual release blocker.
 
+## Parameter mapping
 
----
+- `kParamSensitivity` — scales the high-frequency anomaly contribution.
+- `kParamFusionThreshold` — threshold applied to the heuristic score.
+- `kParamAntiForensicGate` — gate applied to the high-frequency anomaly feature.
 
+The optional tracking tone is part of the VST3 source implementation only; its behavior is not verified until the SDK-backed target is built and tested.
 
+## Server Protection Toolkit
 
-## Optional: Advanced Clipboard MCP Server
+The independent Linux server toolkit lives under `tools/server-protection/`. It provides CSF/ipset integration, blocklist updates, a loopback API, and a browser dashboard. It is not linked into the desktop audio application and does not add network behavior to the audio core.
 
-Developer companion for AI/MCP hosts (not part of the forensic audio binary).
+See [tools/server-protection/README.md](tools/server-protection/README.md) for installation and safety details.
 
-```bash
-cd tools/clipboard-mcp
-./install_clipboard_server.sh   # creates .venv + deps
-./start_clipboard_server.sh
-# Claude Code:
-# claude mcp add clipboard-advanced -- .venv/bin/python clipboard_server_advanced.py
-```
+## Technical reference
 
-See [tools/clipboard-mcp/README.md](tools/clipboard-mcp/README.md).
+See [docs/TECHNICAL_REFERENCE.md](docs/TECHNICAL_REFERENCE.md) for architecture, interfaces, and verification boundaries.
 
-## Technical Reference
+## License and attribution
 
-Full architecture, API, and operations: [docs/TECHNICAL_REFERENCE.md](docs/TECHNICAL_REFERENCE.md)
+- Developer: Lewis James Seals Jr. (`TheRealla`)
+- Organization: TheRealla Audio Forensic Labs
 
----
-
-## Optional: Server Protection Toolkit
-
-Companion scripts under `tools/server-protection/` for **Linux server** hardening (CSF + ipset blocklists). They are **not** part of the desktop/VST3 application and do not add network behavior to DawChecker.
-
-| Script | Purpose |
-|--------|---------|
-| `msv-blocklist-update.sh` | Correct CSF blocklist updater (definition lines only) |
-| `install.sh` | Install CSF/ipset config, cron, and updater |
-| `monitor.sh` | Status report |
-
-```bash
-cd tools/server-protection
-sudo ./install.sh
-sudo /usr/local/bin/msv-blocklist-update.sh   # manual refresh
-sudo /usr/local/bin/msv-monitor.sh            # status
-```
-
-See [tools/server-protection/README.md](tools/server-protection/README.md) for sources, safety notes, and design constraints. The audio application remains offline (no telemetry, no firewall control from the GUI).
-
-## License & Attribution
-
-* **Developer:** Lewis James Seals Jr (**TheRealla**)
-* **Organization:** TheRealla Audio Forensic Labs
-* **Dedicated to:** Honoring the technical history of the Seals family.
-
-*Disclaimer: This tool is intended for expert audio engineers, provenance researchers, and digital forensic examiners. All automated conclusions should be contextualized alongside a comprehensive human review.*
+*Automated analysis is advisory. Interpret results in context and corroborate them with independent methods.*
