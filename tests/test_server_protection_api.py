@@ -170,9 +170,9 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             deny_file = Path(temp_dir) / "csf.deny"
             with deny_file.open("w", encoding="utf-8") as handle:
-                handle.write("# header\\n\\n")
+                handle.write("# header\n\n")
                 for index in range(100_005):
-                    handle.write(f"192.0.2.{index}\\n")
+                    handle.write(f"192.0.2.{index}\n")
             self.assertEqual(api.count_csf_file_entries(str(deny_file)), 100_005)
 
     def test_panic_reports_partial_failure(self):
