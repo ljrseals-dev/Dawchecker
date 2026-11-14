@@ -271,6 +271,37 @@ if(DAWCHECKER_BUILD_GUI)
 endif()
 
 # ============================================================================
+# OPTIONAL VST3 PLUGIN COMPONENT SDK COMPILE CHECK
+# ============================================================================
+option(DAWCHECKER_BUILD_VST3_PLUGIN
+       "Compile the VST3 plugin component against an external Steinberg SDK" OFF)
+set(VST3_SDK_ROOT "" CACHE PATH "Root of a checked-out Steinberg VST3 SDK")
+
+if(DAWCHECKER_BUILD_VST3_PLUGIN)
+    if(NOT EXISTS "${VST3_SDK_ROOT}/public.sdk/source/vst/vstsinglecomponenteffect.h" OR
+       NOT EXISTS "${VST3_SDK_ROOT}/pluginterfaces/base/fplatform.h" OR
+       NOT EXISTS "${VST3_SDK_ROOT}/base/source/fobject.h")
+        message(FATAL_ERROR
+            "DAWCHECKER_BUILD_VST3_PLUGIN=ON requires VST3_SDK_ROOT with "
+            "the public.sdk, pluginterfaces, and base submodules initialized.")
+    endif()
+
+    # Compile the plugin translation unit against the real SDK. This is a
+    # compile check, not a packaged .vst3 bundle or host-validation target.
+    add_library(dawchecker_vst3_compilecheck OBJECT
+        Source/dawchecker_vst3.cpp
+    )
+    target_include_directories(dawchecker_vst3_compilecheck
+        SYSTEM PRIVATE "${VST3_SDK_ROOT}"
+    )
+    target_link_libraries(dawchecker_vst3_compilecheck PRIVATE dawchecker_core)
+    target_compile_features(dawchecker_vst3_compilecheck PRIVATE cxx_std_20)
+    set_target_properties(dawchecker_vst3_compilecheck PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+    )
+endif()
+
+# ============================================================================
 # TESTS (dependency-free, links only core — always available)
 # ============================================================================
 enable_testing()
