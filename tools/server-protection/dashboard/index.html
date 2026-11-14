@@ -99,8 +99,8 @@ body{
 .bars{display:flex;align-items:flex-end;gap:3px;flex:1;padding-bottom:4px}
 .bar{flex:1;border-radius:2px 2px 0 0;transition:height .12s,background .12s;min-height:2px;box-shadow:0 0 4px currentColor}
 
-/* ── THREAT METER ── */
-.threat-col{border-left:1px solid var(--ocean-border);display:flex;flex-direction:column;align-items:center;padding:6px 0 4px;background:var(--ink)}
+/* ── STATUS PANEL ── */
+.status-col{border-left:1px solid var(--ocean-border);display:flex;flex-direction:column;align-items:center;padding:6px 0 4px;background:var(--ink)}
 .thr-lbl{font-size:7px;color:var(--text-dim);letter-spacing:1px;margin-bottom:4px}
 .thr-track{flex:1;width:34px;background:#010a10;border:1px solid var(--ocean-border);border-radius:2px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
 .thr-fill{width:100%;background:linear-gradient(180deg,var(--coral) 0%,#aa1a30 100%);transition:height .3s;box-shadow:0 0 8px var(--coral-glow)}
@@ -143,7 +143,6 @@ body{
 .wl-row-g{grid-template-columns:1fr 60px}
 .ip{color:var(--coral);letter-spacing:1px}
 .ip.ok{color:var(--wave)}
-.cc{color:var(--text-dim)}
 .source{color:var(--text-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{font-size:7px;padding:2px 4px;border-radius:2px;text-align:center;letter-spacing:1px}
 .b-bl{background:#1a0008;color:#882233;border:1px solid #2a0010}
@@ -188,19 +187,6 @@ body{
 .scan-btn.scanning{border-color:var(--amber);color:var(--amber);background:#100c00;animation:scanpulse 1s infinite}
 @keyframes scanpulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* ── AUDIO FORENSICS TAB ── */
-.af-wrap{padding:8px 10px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:360px}
-.af-card{background:var(--surface2);border:1px solid var(--ocean-border);border-radius:4px;padding:8px 10px}
-.af-controls{display:flex;gap:6px;margin-bottom:6px}
-.af-row-info{display:flex;justify-content:space-between;margin-bottom:2px}
-.anom-grid{display:flex;flex-direction:column;gap:1px}
-.anom-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #030e18}
-.anom-lbl{font-size:8px;color:var(--text-dim);letter-spacing:1px}
-.anom-val{font-size:8px;letter-spacing:1px;padding:1px 5px;border-radius:2px}
-.anom-clean{color:#00ccaa;background:#001a14;border:1px solid #003a2a}
-.anom-warn{color:var(--amber);background:#1a1400;border:1px solid #332800}
-.anom-alert{color:var(--coral);background:#1a0008;border:1px solid #330010}
-.anom-idle{color:var(--text-dim);background:transparent;border:1px solid transparent}
 .ftr{background:var(--ink);border-top:2px solid var(--ocean-border);padding:4px 12px;display:flex;justify-content:space-between}
 .ftr-t{font-size:8px;color:var(--text-dim);letter-spacing:1px}
 </style>
@@ -232,7 +218,7 @@ body{
       <div class="server-lbl">Live values returned by the local API</div>
       <div class="meta dim">No fabricated threat meter or risk score</div>
     </div>
-    <div class="threat-col">
+    <div class="status-col">
       <div class="thr-lbl">STATUS</div>
       <div class="thr-pct" id="apiStatusValue">—</div>
     </div>
@@ -366,8 +352,8 @@ body{
 </div>
 
 <script>
-let frame=0,totalBlocked=0,selIP='',selRow=-1,panicked=false,wlSelRow=-1;
-let scanRunning=false,rkhRunning=false,scanTick=0;
+let totalBlocked=0,selIP='',selRow=-1,panicked=false,wlSelRow=-1;
+let scanRunning=false,rkhRunning=false;
 
 const BANS = [];
 const WL = [];
@@ -488,7 +474,6 @@ addLog('Dashboard loaded; awaiting server API data.');
 // Production API client — real CSF data only, no demo callbacks
 const API_BASE = (location.protocol === 'file:' ? 'http://127.0.0.1:8080' : '') + '/api';
 let apiLive = false;
-let apiError = null;
 
 async function api(path, opts = {}) {
   const init = {
@@ -501,11 +486,9 @@ async function api(path, opts = {}) {
   try { data = await r.json(); } catch (_) {}
   if (!r.ok) {
     const err = (data && data.error) || ('HTTP ' + r.status);
-    apiError = err;
     throw new Error(err);
   }
   apiLive = true;
-  apiError = null;
   return data;
 }
 
