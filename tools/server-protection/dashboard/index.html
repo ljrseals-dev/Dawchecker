@@ -437,6 +437,41 @@ function updateDenyCount(){
     count.toLocaleString() + ' entries in csf.deny (API count)';
 }
 
+function renderJobCard(job, statusId, finishedId, exitId) {
+  const status = document.getElementById(statusId);
+  const finished = document.getElementById(finishedId);
+  const exit = document.getElementById(exitId);
+  if (!job) {
+    if (status) { status.textContent = 'NOT RUN'; status.className = 'av-badge av-unk'; }
+    if (finished) finished.textContent = 'not reported';
+    if (exit) exit.textContent = 'not reported';
+    return;
+  }
+
+  if (status) {
+    if (job.state === 'running') {
+      status.textContent = 'RUNNING';
+      status.className = 'av-badge av-warn';
+    } else if (job.state === 'ok') {
+      status.textContent = 'EXIT 0';
+      status.className = 'av-badge av-unk';
+    } else if (job.state === 'error') {
+      status.textContent = 'FAILED';
+      status.className = 'av-badge av-crit';
+    } else {
+      status.textContent = 'UNKNOWN';
+      status.className = 'av-badge av-unk';
+    }
+  }
+
+  if (finished) {
+    const parsed = job.finished ? new Date(job.finished) : null;
+    finished.textContent = parsed && Number.isFinite(parsed.getTime())
+      ? parsed.toLocaleString() : 'not reported';
+  }
+  if (exit) exit.textContent = Number.isInteger(job.rc) ? 'exit ' + job.rc : 'not reported';
+}
+
 function switchTab(id,btn){
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
@@ -517,6 +552,11 @@ async function refreshFromApi() {
     const wlStatus = document.getElementById('wlStatus');
     if (wlStatus) wlStatus.textContent = 'Loaded ' + WL.length + ' entries from API';
     renderWL();
+    const jobResponse = await api('/jobs');
+    renderJobCard(jobResponse.jobs && jobResponse.jobs.clamav,
+                  'clamStatus', 'clamLast', 'clamExit');
+    renderJobCard(jobResponse.jobs && jobResponse.jobs.rkhunter,
+                  'rkhStatus', 'rkhLast', 'rkhExit');
   } catch (e) {
     apiLive = false;
     setFooter('API error: ' + e.message);
@@ -592,11 +632,7 @@ startScan = async function () {
           clearInterval(poll);
           scanRunning = false;
           if (btn) { btn.textContent = '▶ RUN CLAMAV SCAN'; btn.classList.remove('scanning'); }
-          const st = document.getElementById('clamStatus');
-          if (st) {
-            st.textContent = j.state === 'ok' ? 'EXIT 0' : 'FAILED';
-            st.className = j.state === 'ok' ? 'av-badge av-unk' : 'av-badge av-crit';
-          }
+          renderJobCard(j, 'clamStatus', 'clamLast', 'clamExit');
           addLog('[clamav] ' + (j.detail || j.state));
         }
       } catch (_) { /* keep polling */ }
@@ -634,11 +670,7 @@ startRkh = async function () {
           clearInterval(poll);
           rkhRunning = false;
           if (btn) { btn.textContent = '▶ RUN RKHUNTER CHECK'; btn.classList.remove('scanning'); }
-          const st = document.getElementById('rkhStatus');
-          if (st) {
-            st.textContent = j.state === 'ok' ? 'EXIT 0' : 'FAILED';
-            st.className = j.state === 'ok' ? 'av-badge av-unk' : 'av-badge av-warn';
-          }
+          renderJobCard(j, 'rkhStatus', 'rkhLast', 'rkhExit');
           addLog('[rkhunter] ' + (j.detail || j.state));
         }
       } catch (_) {}
