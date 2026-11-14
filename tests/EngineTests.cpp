@@ -5,6 +5,13 @@
 #include "core/CodecScanner.h"
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <vector>
+#if defined(DAWCHECKER_HAVE_CRYPTO)
+#include "core/ForensicHash.h"
+#endif
 
 namespace {
 int g_failures = 0;
@@ -79,6 +86,62 @@ int main()
         check(true, "CodecScanner::scan() executes without throwing");
         (void)findings;
     }
+
+#if defined(DAWCHECKER_HAVE_CRYPTO)
+    // --- SHA-256: FIPS 180-4 empty and "abc" known-answer vectors.
+    {
+        using dawchecker::forensic::sha256;
+        static constexpr std::array<std::uint8_t, 32> emptyExpected = {
+            0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
+            0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
+            0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
+            0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
+        };
+        static constexpr std::array<std::uint8_t, 32> abcExpected = {
+            0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea,
+            0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
+            0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c,
+            0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad
+        };
+
+        const std::vector<std::uint8_t> empty;
+        const std::vector<std::uint8_t> abc = {'a', 'b', 'c'};
+        const auto emptyHash = sha256(empty);
+        const auto abcHash = sha256(abc);
+        check(emptyHash.size() == 32 &&
+              std::equal(emptyHash.begin(), emptyHash.end(), emptyExpected.begin()),
+              "SHA-256 empty-string vector matches FIPS 180-4");
+        check(abcHash.size() == 32 &&
+              std::equal(abcHash.begin(), abcHash.end(), abcExpected.begin()),
+              "SHA-256 abc vector matches FIPS 180-4");
+    }
+
+    // --- Independent 1000-byte all-zero vector computed with OpenSSL CLI:
+    // head -c 1000 /dev/zero | openssl dgst -sha256
+    {
+        static constexpr std::array<std::uint8_t, 32> k1kExpected = {
+            0x54, 0x1b, 0x3e, 0x9d, 0xaa, 0x09, 0xb2, 0x0b,
+            0xf8, 0x5f, 0xa2, 0x73, 0xe5, 0xcb, 0xd3, 0xe8,
+            0x01, 0x85, 0xaa, 0x4e, 0xc2, 0x98, 0xe7, 0x65,
+            0xdb, 0x87, 0x74, 0x2b, 0x70, 0x13, 0x8a, 0x53
+        };
+        const std::vector<std::uint8_t> thousandZeros(1000, 0x00);
+        const auto digest = dawchecker::forensic::sha256(thousandZeros);
+        check(digest.size() == 32 &&
+              std::equal(digest.begin(), digest.end(), k1kExpected.begin()),
+              "SHA-256 1000 zero-byte vector matches independent OpenSSL CLI result");
+    }
+
+    {
+        bool rejectedNull = false;
+        try {
+            (void)dawchecker::forensic::sha256(nullptr, 1);
+        } catch (const std::invalid_argument&) {
+            rejectedNull = true;
+        }
+        check(rejectedNull, "SHA-256 rejects a null pointer with non-zero length");
+    }
+#endif
 
     if (g_failures == 0)
         std::printf("\nAll tests passed.\n");
