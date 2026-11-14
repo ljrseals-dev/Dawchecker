@@ -73,6 +73,8 @@ install_csf() {
     return 1
   fi
 
+  expected_sha="$(printf '%s' "$expected_sha" | tr '[:upper:]' '[:lower:]')"
+
   log "Downloading CSF for checksum verification..."
   CSF_TMP_DIR="$(mktemp -d /tmp/server-protection-csf.XXXXXX)"
   local archive="$CSF_TMP_DIR/csf.tgz"
