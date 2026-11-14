@@ -235,7 +235,7 @@ The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 
 **Factory:** class registration and UID are declared in the translation unit. This metadata has not been validated by an SDK-backed build.
 
-**Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_core` and the appropriate Steinberg SDK targets, and pass an SDK-backed build before VST3 integration is release-verified. Link `dawchecker_crypto` only if a future plugin interface actually uses the hash API.
+**Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_core` and the appropriate Steinberg SDK targets, and pass an SDK-backed build before VST3 integration is release-verified. A static source-contract test runs in CI but is not a substitute for compiling against the SDK. Link `dawchecker_crypto` only if a future plugin interface actually uses the hash API.
 
 ---
 
@@ -308,6 +308,9 @@ Coverage includes:
 - `CodecScanner::scan()` smoke execution
 - Shared feature frame/hop/ring behavior, low/high-band FFT separation,
   non-finite input sanitization, and allocation-counter checks
+- MSV_Engine::process zero-heap-allocation regression after preparation
+- VST3 source-contract consistency and evidence-accumulator interface checks
+  (static checks only; not an SDK compile)
 - SPSC queue capacity, FIFO ordering, concurrent producer/consumer behavior,
   and allocation-free enqueue/dequeue
 - Evidence accumulator score-band and relationship behavior
