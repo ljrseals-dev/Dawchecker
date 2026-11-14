@@ -8,7 +8,7 @@
 namespace dawchecker::dsp {
 
 struct RealtimeEvidenceEvent {
-    float probability = 0.0f;
+    float score = 0.0f;
     std::uint64_t sequence = 0;
 };
 
