@@ -323,7 +323,7 @@ No GoogleTest dependency (minimal harness).
 **Root:** `tools/server-protection/`  
 **Install prefix:** `/opt/server-protection`  
 **Service:** `server-protection.service`  
-**Bind:** `127.0.0.1:8080` (override with `SPP_HOST` / `SPP_PORT`)
+**Bind:** IPv4 loopback only (`127.0.0.1:8080` by default); `SPP_HOST` rejects non-loopback and IPv6 addresses, and `SPP_PORT` must be 1–65535.
 
 ### 9.1 Components
 
