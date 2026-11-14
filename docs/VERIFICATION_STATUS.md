@@ -8,10 +8,10 @@
 
 | Area | Successful run | Tested commit | Scope |
 |---|---:|---|---|
-| Core + crypto | `43571120199` | `052b7e2d` | Mandatory OpenSSL EVP SHA-256 gate, registered CTest suite, ASan/UBSan build and tests, VST3 source-contract checks |
+| Core + crypto | `43571641592` | `8ce9163e` | Mandatory OpenSSL EVP SHA-256 gate, registered CTest suite, ASan/UBSan build and tests, VST3 source-contract checks |
 | Server API security | `43571120238` | `052b7e2d` | API compile and regression tests, including Host/Origin, body-size, loopback bind, port validation, status counts, and partial panic failure |
-| VST3 SDK compile | `43570255587` | `27166113` | Compiles `Source/dawchecker_vst3.cpp` against pinned Steinberg SDK commit `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96` |
-| Dashboard | `43569781124` | `0477c1ab` | JavaScript syntax, API behavior tests, and real-browser DOM/action tests |
+| VST3 SDK compile | `43571257974` | `e5649a12` | Compiles `Source/dawchecker_vst3.cpp` against pinned Steinberg SDK commit `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96` |
+| Dashboard | `43571641669` | `8ce9163e` | JavaScript syntax, API behavior tests, and real-browser DOM/action tests |
 | Installer | `43570806427` | `36cfb0b1` | Shell syntax, installer contract tests, checksum-gated CSF install tests, and hardened-build sidecar failure tests |
 
 The runs above completed successfully. Earlier failed runs were superseded by later commits and successful reruns; they are not presented as passing evidence.
@@ -24,7 +24,7 @@ The runs above completed successfully. Earlier failed runs were superseded by la
 - Prevented the ultrasonic scanner from relabeling out-of-Nyquist bands as lower-frequency detections.
 - Fixed VST3 evidence-accumulator calls, the factory macro, null-input output handling, and the input/output parameter-ID collision.
 - Removed undefined, unused container/hash stubs from the VST3 translation unit.
-- Replaced the dashboard's count-derived threat score with the authoritative, streaming CSF deny-file entry count (tested beyond 100,000 entries); scan exit codes are not labeled as proof of cleanliness.
+- Replaced the dashboard's count-derived threat score with the authoritative, streaming CSF deny-file entry count (tested beyond 100,000 entries); removed fabricated country/organization/hit fields; scan cards show server-reported timestamps and exit codes, not claims of cleanliness.
 - Hardened API binding, Host/Origin checks, JSON body parsing, job snapshots, and partial-failure reporting.
 - Made required package failures fatal, scanner packages explicitly optional, and CSF installation fail closed unless an independently verified archive digest is supplied.
 - Invalidated stale checksum sidecars before vendoring/configuration and only wrote a new sidecar after successful build and registered tests.
