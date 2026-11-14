@@ -156,5 +156,27 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         self.assertEqual(status, 405)
 
 
+    def test_status_uses_csf_deny_count_without_fabricated_risk_score(self):
+        with patch.object(api, "require_csf"), \
+             patch.object(api, "ipset_entry_counts", return_value={"BITWIRE_IN": 999}), \
+             patch.object(api, "read_csf_file", return_value=["192.0.2.1", "192.0.2.2"]), \
+             patch.object(api, "is_root", return_value=True):
+            payload = api.status_payload()
+        self.assertEqual(payload["blocked"], 2)
+        self.assertNotIn("score", payload)
+        self.assertNotIn("score_label", payload)
+
+    def test_panic_reports_partial_failure(self):
+        with patch.object(api, "guard_mutation"), \
+             patch.object(api, "csf_reload", return_value=(False, "reload failed")), \
+             patch.object(api, "trigger_clamav", return_value={"ok": True, "job": "clamav"}), \
+             patch.object(api, "trigger_rkhunter", side_effect=RuntimeError("rkhunter missing")), \
+             patch.object(api, "trigger_msv_blocklist", return_value={"ok": True, "job": "msv"}):
+            result = api.trigger_panic()
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["results"]["csf_reload"]["ok"], False)
+        self.assertFalse(result["results"]["rkhunter"]["ok"])
+
 if __name__ == "__main__":
     unittest.main()
