@@ -81,8 +81,8 @@ Without CSF the process **exits** at startup. Mutations require root (`SPP_REQUI
 - For a dashboard served from another hostname, configure the origin explicitly, for example:
 
 ```bash
-SPP_ALLOWED_ORIGINS="https://watchtower.example.net" \\
-  SPP_HOST="127.0.0.1" SPP_PORT=8080 \\
+SPP_ALLOWED_ORIGINS="https://watchtower.example.net" \
+  SPP_HOST="127.0.0.1" SPP_PORT=8080 \
   python3 server_protection_api.py
 ```
 
