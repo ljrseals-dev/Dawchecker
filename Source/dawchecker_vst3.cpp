@@ -48,7 +48,7 @@ using dawchecker::dsp::RealtimeEvidenceQueue;
 using dawchecker::dsp::EvidenceAccumulator;
 
 // Stable identifier for the DawChecker VST3 plugin component.
-static const FUID kDawCheckerMonolithUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
+static const FUID kDawCheckerPluginUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
 
 enum {
     kParamSensitivity = 0,
@@ -424,7 +424,7 @@ BEGIN_FACTORY_DEF("TheRealla Audio Forensic Labs",
                   "https://github.com/TheRealla", 
                   "mailto:support@therealla.internal")
 
-    DEF_CLASS2(INLINE_UID_FROM_FUID(DawCheckerSecureUltimate::kDawCheckerMonolithUID),
+    DEF_CLASS2(INLINE_UID_FROM_FUID(DawCheckerSecureUltimate::kDawCheckerPluginUID),
                PClassInfo::kManyInstances,
                kVstAudioEffectClass,
                "DawChecker Audio Forensics",
