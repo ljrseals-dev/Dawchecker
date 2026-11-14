@@ -36,15 +36,28 @@ finish() {
     exit "$rc"
 }
 
-# OS release is sourced only from the standard root-owned file in production.
+# Parse os-release as data, never source it as shell code. This keeps a
+# caller-controlled fixture path from becoming a command-execution vector.
 OS_ID=unknown OS_LIKE= OS_VERSION= OS_PRETTY=unknown
 if [ -r "$OS_RELEASE_FILE" ]; then
-    # shellcheck disable=SC1090
-    . "$OS_RELEASE_FILE"
-    OS_ID="${ID:-unknown}"
-    OS_LIKE="${ID_LIKE:-}"
-    OS_VERSION="${VERSION_ID:-}"
-    OS_PRETTY="${PRETTY_NAME:-$OS_ID}"
+    while IFS='=' read -r key value || [ -n "$key" ]; do
+        case "$key" in
+            ID) OS_ID="$value" ;;
+            ID_LIKE) OS_LIKE="$value" ;;
+            VERSION_ID) OS_VERSION="$value" ;;
+            PRETTY_NAME) OS_PRETTY="$value" ;;
+        esac
+    done < "$OS_RELEASE_FILE"
+    for key in OS_ID OS_LIKE OS_VERSION OS_PRETTY; do
+        value="${!key}"
+        case "$value" in
+            \"*\") value="${value#\\\"}"; value="${value%\\\"}" ;;
+            \'*\') value="${value#\\'}"; value="${value%\\'}" ;;
+        esac
+        printf -v "$key" '%s' "$value"
+    done
+    [ -n "$OS_ID" ] || OS_ID=unknown
+    [ -n "$OS_PRETTY" ] || OS_PRETTY="$OS_ID"
 fi
 record OS_ID "$OS_ID"
 record OS_LIKE "$OS_LIKE"
@@ -105,7 +118,8 @@ while IFS= read -r line; do
     case "$line" in
         "table "*)
             case "$line" in
-                "table inet docker"*|"table ip docker"*|"table ip6 docker"*|                "table inet crowdsec"*|"table ip crowdsec"*|"table ip6 crowdsec"*) ;;
+                "table inet docker"*|"table ip docker"*|"table ip6 docker"*|\
+                "table inet crowdsec"*|"table ip crowdsec"*|"table ip6 crowdsec"*) ;;
                 *) NFT_NON_THIRDPARTY_RULES=yes ;;
             esac
             ;;
