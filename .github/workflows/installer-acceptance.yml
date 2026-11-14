@@ -1,0 +1,28 @@
+name: Installer acceptance
+
+on:
+  push:
+    branches:
+      - "repair/p1-installer-hardening"
+  pull_request:
+    paths:
+      - "tools/server-protection/install.sh"
+      - "scripts/build_hardened.sh"
+      - "tests/test_installer_contract.sh"
+      - ".github/workflows/installer-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: bash -n tools/server-protection/install.sh scripts/build_hardened.sh tests/test_installer_contract.sh tests/test_build_hardened.sh
+      - name: Run installer contract tests
+        run: bash tests/test_installer_contract.sh
+      - name: Run hardened build contract tests
+        run: bash tests/test_build_hardened.sh
