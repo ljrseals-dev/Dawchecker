@@ -72,6 +72,24 @@ sudo ./run_dashboard.sh
 
 Without CSF the process **exits** at startup. Mutations require root (`SPP_REQUIRE_ROOT=1` default).
 
+### Browser mutation protection
+
+- Mutating `POST` and `DELETE` requests must use `Content-Type: application/json`.
+- They must also send an exact, configured `Origin`. Missing, `null`, and unlisted origins are rejected.
+- The allowlist is configured with `SPP_ALLOWED_ORIGINS`, a comma-separated list of complete origins (scheme, hostname, and optional port). It is independent of the incoming `Host` header.
+- The default allowlist covers loopback origins on the configured `SPP_PORT`: `http://127.0.0.1:8080`, `http://localhost:8080`, and `http://[::1]:8080`.
+- For a dashboard served from another hostname, configure the origin explicitly, for example:
+
+```bash
+SPP_ALLOWED_ORIGINS="https://watchtower.example.net" \\
+  SPP_HOST="127.0.0.1" SPP_PORT=8080 \\
+  python3 server_protection_api.py
+```
+
+- Cross-origin CORS access and `OPTIONS` preflight are not enabled. Serve the dashboard from this API so it uses same-origin requests.
+- An unblock is successful only if both `csf -dr` and `csf -a` succeed. If deny removal succeeds but allow-list addition fails, the API returns HTTP 500 with `partial: true` and `stage: "allow_add"`; the IP may be reachable and may be banned again by LFD.
+- Regression tests: `python3 -m unittest discover -s tests -p 'test_server_protection_api.py' -v`.
+
 ---
 
 ## Blocklist sources (MSV)
