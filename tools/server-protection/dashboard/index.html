@@ -212,8 +212,8 @@ body{
   <div class="hdr">
     <span class="title">SERVER <span>PROTECTION</span> PRO</span>
     <div class="hdr-r">
-      <span><span class="dot"></span>csf active</span>
-      <span><span class="dot amber"></span>API pending</span>
+      <span><span class="dot"></span>CSF API</span>
+      <span><span class="dot amber"></span><span id="apiStatusLabel">API pending</span></span>
       <span>build 1.0</span>
     </div>
   </div>
@@ -400,9 +400,9 @@ function renderBans(){
     let bl=e.active?'BLOCKED':'UNBKD';
     let ic=e.active?'↑':'·';
     return `<div class="row ban-row${sel?' sel':''}" onclick="selectBan(${i})">
-      <span class="ip${e.active?'':' ok'}">${e.ip}</span>
-      <span class="cc">${e.cc}</span>
-      <span class="org">${e.org}</span>
+      <span class="ip${e.active?'':' ok'}">${escapeHtml(e.ip)}</span>
+      <span class="cc">${escapeHtml(e.cc)}</span>
+      <span class="org">${escapeHtml(e.org)}</span>
       <span class="badge ${bc}">${bl}</span>
       <span class="unbl-ico" onclick="event.stopPropagation();quickUnblock(${i})" title="unblock">${ic}</span>
     </div>`;
@@ -500,6 +500,8 @@ async function api(path, opts = {}) {
 function setFooter(msg) {
   const el = document.getElementById('ftrR');
   if (el) el.textContent = msg;
+  const status = document.getElementById('apiStatusLabel');
+  if (status) status.textContent = apiLive ? 'API live' : 'API unavailable';
 }
 
 async function refreshFromApi() {
@@ -698,8 +700,8 @@ doPanic = async function () {
 };
 
 // Boot: no seed data — wait for API
-BANS.length = 0;
-WL.length = 0;
+BANS.splice(0, BANS.length);
+WL.splice(0, WL.length);
 renderBans();
 renderWL();
 updateDenyCount();
