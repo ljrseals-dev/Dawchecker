@@ -1,10 +1,10 @@
-# Server Protection Pro (Production)
+# Server Protection Toolkit (Linux)
 
-Linux server hardening companion for DawChecker Secure Ultimate.
+Linux server-hardening companion distributed alongside DawChecker.
 
 **Production only — no demo mode.** Requires CSF.
 
-This toolkit is **not** part of the DawChecker desktop/VST3 audio app. It runs on a Linux host as root and never links into the audio binary.
+This toolkit is **not** part of the DawChecker desktop audio application or its VST3 plugin component. It runs as a separate process on a Linux host and never links into the audio binary.
 
 ---
 
@@ -38,7 +38,7 @@ This will:
 5. Symlink CLI tools into `/usr/local/bin`
 6. Cron MSV updates every 2 hours
 7. Run initial blocklist update
-8. Enable + start `server-protection.service`
+8. Enable + start `server-protection.service` when systemd is available; otherwise report the service setup as skipped.
 
 Open: **http://127.0.0.1:8080/**
 
@@ -56,7 +56,7 @@ sudo ./run_dashboard.sh
 
 | Method | Path | Action |
 |--------|------|--------|
-| GET | `/api/status` | Score, ipset counts, root flag |
+| GET | `/api/status` | CSF deny-file count, ipset counts, jobs, root flag; no risk score is calculated |
 | GET | `/api/bans` | `/etc/csf/csf.deny` |
 | GET | `/api/whitelist` | `/etc/csf/csf.allow` |
 | GET | `/api/logs` | API event log |
@@ -67,7 +67,7 @@ sudo ./run_dashboard.sh
 | POST | `/api/refresh` | `csf -r` |
 | POST | `/api/scan/clamav` | Start ClamAV |
 | POST | `/api/scan/rkhunter` | Start rkhunter |
-| POST | `/api/panic` | Reload + scans + MSV update |
+| POST | `/api/panic` | CSF reload + scan/update job attempts; partial failures are reported |
 | POST | `/api/blocklist/update` | Run MSV script |
 
 Without CSF the process **exits** at startup. Mutations require root (`SPP_REQUIRE_ROOT=1` default).
@@ -76,8 +76,8 @@ Without CSF the process **exits** at startup. Mutations require root (`SPP_REQUI
 
 - Mutating `POST` and `DELETE` requests must use `Content-Type: application/json`.
 - They must also send an exact, configured `Origin`. Missing, `null`, and unlisted origins are rejected.
-- The allowlist is configured with `SPP_ALLOWED_ORIGINS`, a comma-separated list of complete origins (scheme, hostname, and optional port). It is independent of the incoming `Host` header.
-- The default allowlist covers loopback origins on the configured `SPP_PORT`: `http://127.0.0.1:8080`, `http://localhost:8080`, and `http://[::1]:8080`.
+- The allowlist is configured with `SPP_ALLOWED_ORIGINS`, a comma-separated list of complete origins (scheme, hostname, and optional port). The request `Host` must separately match the authority of one of those origins; an incoming Host value cannot expand the allowlist.
+- The IPv4-loopback default allowlist covers `http://127.0.0.1:8080` and `http://localhost:8080` on the default port. IPv6 or non-default deployments must configure their exact origin explicitly.
 - For a dashboard served from another hostname, configure the origin explicitly, for example:
 
 ```bash
