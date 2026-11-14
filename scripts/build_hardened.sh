@@ -99,7 +99,7 @@ echo "→ Binary: ${BIN}"
 # ---------------------------------------------------------------------------
 # 6. Integrity sidecar
 # ---------------------------------------------------------------------------
-CHECKSUM_TMP="${BIN}.sha256.tmp.$"
+CHECKSUM_TMP="$(mktemp "${BIN}.sha256.tmp.XXXXXX")"
 cleanup_checksum() {
     rm -f -- "${CHECKSUM_TMP}"
 }
