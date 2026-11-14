@@ -71,6 +71,33 @@ CRON_CAPTURE="$TMP/cron.duplicate" CRON_HAS_ENTRY=1 PATH="$TMP/mockbin:$TMP/empt
   SPP_INSTALLER_LIB_ONLY=1 /bin/bash -c 'source "$1"; setup_cron' _ "$INSTALLER"
 test ! -e "$TMP/cron.duplicate"
 
+# Required package installation failures must abort instead of being hidden.
+cat > "$TMP/mockbin/apt-get" <<'SH'
+#!/bin/sh
+case "$1" in
+  update) exit "${APT_UPDATE_FAIL:-0}" ;;
+  install)
+    case " $* " in
+      *" clamav "*) exit "${APT_OPTIONAL_FAIL:-0}" ;;
+      *) exit "${APT_REQUIRED_FAIL:-0}" ;;
+    esac
+    ;;
+  *) exit 2 ;;
+esac
+SH
+chmod +x "$TMP/mockbin/apt-get"
+
+if PATH="$TMP/mockbin:$TMP/empty" APT_REQUIRED_FAIL=8 \
+  SPP_INSTALLER_LIB_ONLY=1 /bin/bash -c 'source "$1"; OS=ubuntu; install_pkgs' _ "$INSTALLER" \
+  >"$TMP/required-package.out" 2>&1; then
+  echo "installer ignored a required package failure" >&2
+  exit 1
+fi
+
+optional_output="$(PATH="$TMP/mockbin:$TMP/empty" APT_OPTIONAL_FAIL=9 \
+  SPP_INSTALLER_LIB_ONLY=1 /bin/bash -c 'source "$1"; OS=ubuntu; install_pkgs' _ "$INSTALLER" 2>&1)"
+grep -q 'optional scanner packages could not be installed' <<<"$optional_output"
+
 # The executable installer must still reject non-root execution.
 if bash "$INSTALLER" >"$TMP/root-check.out" 2>&1; then
   echo "installer unexpectedly ran without root" >&2
