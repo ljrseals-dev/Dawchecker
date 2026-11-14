@@ -23,6 +23,7 @@
 #include <chrono>
 
 #include "core/ForensicHash.h"
+#include "core/SharedFeaturePipeline.h"
 
 // VST3 SDK Core Structural Includes
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
@@ -35,6 +36,9 @@ using namespace Steinberg;
 using namespace Steinberg::Vst;
 
 namespace DawCheckerSecureUltimate {
+
+using dawchecker::dsp::FrameAnalysisResult;
+using dawchecker::dsp::SharedFeaturePipeline;
 
 // Unique identifier for the monolithic plugin class factory
 static const FUID kDawCheckerMonolithUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
@@ -62,12 +66,6 @@ struct AudioFeatureContext {
     float spectral_flux;
 };
 
-struct FrameAnalysisResult {
-    float phase_coherence;
-    float high_freq_anomaly;
-    float noise_floor;
-    bool splice_flag;
-};
 
 struct ContainerEvidence {
     ContainerType type;
@@ -151,101 +149,6 @@ private:
 // ============================================================================
 // 3. REAL-TIME CORE FORENSIC DSP PIPELINE
 // ============================================================================
-
-class SharedFeaturePipeline {
-public:
-    explicit SharedFeaturePipeline(double sampleRate) 
-        : sample_rate_(sampleRate), fft_size_(512), hop_size_(128), write_pos_(0), read_pos_(0) {
-        input_buffer_.resize(16384, 0.0f);
-        fft_window_.resize(fft_size_);
-        for (size_t i = 0; i < fft_size_; ++i) {
-            fft_window_[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (fft_size_ - 1)));
-        }
-        prev_phases_.resize(fft_size_ / 2 + 1, 0.0f);
-        history_coherence_.fill(1.0f);
-        history_index_ = 0;
-    }
-
-    void writeSamples(const float* data, int numSamples) noexcept {
-        for (int i = 0; i < numSamples; ++i) {
-            input_buffer_[write_pos_] = data[i];
-            write_pos_ = (write_pos_ + 1) % input_buffer_.size();
-        }
-    }
-
-    bool isFrameAvailable() const noexcept {
-        size_t available = (write_pos_ >= read_pos_) ? 
-            (write_pos_ - read_pos_) : (input_buffer_.size() - read_pos_ + write_pos_);
-        return available >= fft_size_;
-    }
-
-    FrameAnalysisResult processNextFrame(float sensitivity, float anomalyGate) {
-        std::vector<float> frame(fft_size_);
-        size_t temp_read = read_pos_;
-        for (size_t i = 0; i < fft_size_; ++i) {
-            frame[i] = input_buffer_[temp_read] * fft_window_[i];
-            temp_read = (temp_read + 1) % input_buffer_.size();
-        }
-        read_pos_ = (read_pos_ + hop_size_) % input_buffer_.size();
-
-        size_t bins = fft_size_ / 2 + 1;
-        std::vector<std::complex<float>> spectrum(bins, 0.0f);
-        float hf_energy = 0.0f;
-        float lf_energy = 0.0f;
-        float total_phase_diff = 0.0f;
-
-        // Isolated Fourier Transform processing loop
-        for (size_t k = 0; k < bins; ++k) {
-            float real_sum = 0.0f;
-            float imag_sum = 0.0f;
-            float angle_factor = -2.0f * M_PI * k / fft_size_;
-            
-            for (size_t n = 0; n < fft_size_; ++n) {
-                float angle = angle_factor * n;
-                real_sum += frame[n] * std::cos(angle);
-                imag_sum += frame[n] * std::sin(angle);
-            }
-            spectrum[k] = std::complex<float>(real_sum, imag_sum);
-            float mag = std::abs(spectrum[k]);
-            float phase = std::arg(spectrum[k]);
-
-            if (k > bins / 2) hf_energy += mag;
-            else lf_energy += mag;
-
-            float phase_deriv = phase - prev_phases_[k];
-            prev_phases_[k] = phase;
-            total_phase_diff += std::abs(std::atan2(std::sin(phase_deriv), std::cos(phase_deriv)));
-        }
-
-        float norm_coherence = 1.0f - (total_phase_diff / (bins * M_PI));
-        history_coherence_[history_index_] = norm_coherence;
-        history_index_ = (history_index_ + 1) % history_coherence_.size();
-
-        float sum_coherence = 0.0f;
-        for (float val : history_coherence_) sum_coherence += val;
-        float mean_coherence = sum_coherence / history_coherence_.size();
-
-        FrameAnalysisResult res;
-        res.phase_coherence = mean_coherence;
-        res.high_freq_anomaly = (lf_energy > 0.0f) ? (hf_energy / lf_energy) : 0.0f;
-        res.noise_floor = lf_energy / bins;
-        res.splice_flag = (res.high_freq_anomaly * sensitivity > anomalyGate) && (res.phase_coherence < 0.50f);
-
-        return res;
-    }
-
-private:
-    double sample_rate_;
-    size_t fft_size_;
-    size_t hop_size_;
-    size_t write_pos_;
-    size_t read_pos_;
-    std::vector<float> input_buffer_;
-    std::vector<float> fft_window_;
-    std::vector<float> prev_phases_;
-    std::array<float, 16> history_coherence_;
-    size_t history_index_;
-};
 
 // ============================================================================
 // 4. PLATT-SCALED EVIDENCE FUSION METAMODEL
