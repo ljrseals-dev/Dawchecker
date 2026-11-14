@@ -34,6 +34,7 @@ let bans = [{
 let whitelist = [];
 let failUnblock = false;
 let apiUnavailable = false;
+let omitBlocked = false;
 const calls = [];
 
 async function fetchMock(url, init) {
@@ -46,14 +47,15 @@ async function fetchMock(url, init) {
     if (apiUnavailable) {
       return { ok: false, status: 503, json: async () => ({ error: 'API unavailable' }) };
     }
-    return { ok: true, status: 200, json: async () => ({
-      blocked: 12,
+    const status = {
       score: 140,
       score_label: 'HIGH',
       bitwire_estimate: 3,
       ipsum_estimate: 4,
       root: true
-    }) };
+    };
+    if (!omitBlocked) status.blocked = 12;
+    return { ok: true, status: 200, json: async () => status };
   }
   if (pathname === '/api/bans') {
     return { ok: true, status: 200, json: async () => ({ bans }) };
@@ -152,6 +154,13 @@ async function flush() {
     'API outage labels the previous count as stale instead of displaying zero');
   assert.match(getElementById('banCount').textContent, /cached entries; API offline/,
     'cached bans are not presented as a live API response');
+
+  apiUnavailable = false;
+  omitBlocked = true;
+  await context.refreshFromApi();
+  assert.equal(getElementById('scoreNum').textContent, '—');
+  assert.equal(getElementById('denyCount').textContent, 'CSF deny count unavailable',
+    'a missing blocked count is not coerced to zero');
 
   console.log('Dashboard API integration tests passed.');
 })().catch(error => {
