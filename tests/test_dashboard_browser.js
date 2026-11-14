@@ -68,6 +68,16 @@ async function main() {
       });
       return;
     }
+    if (url.pathname === '/api/jobs') {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ jobs: {
+          clamav: { state: 'ok', rc: 0, detail: 'completed', finished: '2026-11-14T08:00:00Z' },
+          rkhunter: { state: 'error', rc: 1, detail: 'scanner returned nonzero', finished: '2026-11-14T08:01:00Z' }
+        } })
+      });
+      return;
+    }
     if (url.pathname === '/api/unblock' && method === 'POST') {
       if (failUnblock) {
         await route.fulfill({
@@ -97,6 +107,10 @@ async function main() {
 
     assert.equal(await page.locator('#scoreNum').textContent(), '12');
     assert.equal(await page.locator('#scoreSt').textContent(), 'CSF DENY ENTRIES');
+    assert.equal(await page.locator('#clamStatus').textContent(), 'EXIT 0');
+    assert.equal(await page.locator('#clamExit').textContent(), 'exit 0');
+    assert.equal(await page.locator('#rkhStatus').textContent(), 'FAILED');
+    assert.equal(await page.locator('#rkhExit').textContent(), 'exit 1');
     assert.equal(await page.locator('#banList img').count(), 0,
       'untrusted ban metadata is rendered as text, not HTML');
     assert.match(await page.locator('#banList').textContent(), /<img src=x onerror=alert\(1\)>/);
