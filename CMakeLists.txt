@@ -266,6 +266,29 @@ add_executable(engine_tests
 target_include_directories(engine_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(engine_tests PRIVATE dawchecker_core)
 
+# The crypto acceptance gate is mandatory by default. Keep OpenSSL scoped to
+# the forensic hash library and its direct consumers, not the general core/GUI.
+option(DAWCHECKER_REQUIRE_CRYPTO
+       "Fail the build if OpenSSL is unavailable (crypto acceptance gate)" ON)
+
+if(DAWCHECKER_REQUIRE_CRYPTO)
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    add_library(dawchecker_crypto STATIC
+        src/core/ForensicHash.cpp
+    )
+    target_include_directories(dawchecker_crypto
+        PUBLIC ${CMAKE_SOURCE_DIR}/src
+    )
+    target_link_libraries(dawchecker_crypto PUBLIC OpenSSL::Crypto)
+    target_link_libraries(engine_tests PRIVATE dawchecker_crypto)
+    target_compile_definitions(engine_tests PRIVATE DAWCHECKER_HAVE_CRYPTO=1)
+    message(STATUS "Crypto gate: OpenSSL ${OPENSSL_VERSION} — SHA-256 tests enabled")
+else()
+    message(WARNING
+        "Crypto acceptance gate DISABLED. Do not merge repair/p0-crypto "
+        "with this build configuration.")
+endif()
+
 add_test(NAME engine_tests COMMAND engine_tests)
 
 # ============================================================================
