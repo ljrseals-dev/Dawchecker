@@ -104,7 +104,7 @@ NFT_FIREWALLD=no NFT_UFW=no
 while IFS= read -r line; do
     case "$line" in
         "table inet firewalld"*|"table ip firewalld"*|"table ip6 firewalld"*) NFT_FIREWALLD=yes ;;
-        table\\ inet\\ ufw*|table\\ ip\\ ufw*|table\\ ip6\\ ufw*) NFT_UFW=yes ;;
+        "table inet ufw"*|"table ip ufw"*|"table ip6 ufw"*) NFT_UFW=yes ;;
     esac
 done <<< "$nft_rules"
 
