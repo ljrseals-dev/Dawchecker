@@ -40,11 +40,14 @@ void drawDetectorRow(const char* name, const dsp::DetectorResult& result)
     ImGui::SameLine(220);
 
     char buf[64];
-    std::snprintf(buf, sizeof(buf), "%.0f%%", result.confidence);
+    if (result.locationHz > 0.0)
+        std::snprintf(buf, sizeof(buf), "%.0f%% · %.0f Hz", result.confidence, result.locationHz);
+    else
+        std::snprintf(buf, sizeof(buf), "%.0f%%", result.confidence);
     ImGui::TextUnformatted(buf);
     ImGui::SameLine(280);
     ImGui::TextColored(ImVec4(p.textSecondary[0], p.textSecondary[1], p.textSecondary[2], p.textSecondary[3]),
-                        "%s", result.label.c_str());
+                        "%s", result.label);
 }
 
 } // namespace
