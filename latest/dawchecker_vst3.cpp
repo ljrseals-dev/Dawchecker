@@ -372,7 +372,6 @@ public:
         }
 
         if (validStereo) {
-            constexpr double twoPi = 6.28318530717958647692;
             for (int32 i = 0; i < data.numSamples; ++i) {
                 const float trackingTone = tamper_alert_state_ > 0.15f
                     ? 0.015f * static_cast<float>(std::sin(tone_phase_))
