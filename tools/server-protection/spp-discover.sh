@@ -103,8 +103,8 @@ case "$ipt_rules" in *"-A "*) IPTABLES_RULES_PRESENT=yes ;; esac
 NFT_FIREWALLD=no NFT_UFW=no
 while IFS= read -r line; do
     case "$line" in
-        "table inet firewalld"|"table ip firewalld"|"table ip6 firewalld") NFT_FIREWALLD=yes ;;
-        "table inet ufw"|"table ip ufw"|"table ip6 ufw") NFT_UFW=yes ;;
+        "table inet firewalld"*|"table ip firewalld"*|"table ip6 firewalld"*) NFT_FIREWALLD=yes ;;
+        "table inet ufw"*"|"table ip ufw"*"|"table ip6 ufw"*) NFT_UFW=yes ;;
     esac
 done <<< "$nft_rules"
 
@@ -236,8 +236,8 @@ if command -v fail2ban-client >/dev/null 2>&1; then
             case "$line" in
                 *"Jail list:"*)
                     jails="${line#*Jail list:}"
-                    jails="${jails//,/}"
-                    jails="${jails// /}"
+                    jails="${jails#"${jails%%[![:space:]]*}"}"
+                    jails="${jails%"${jails##*[![:space:]]}"}"
                     ;;
             esac
         done <<< "$jail_output"
