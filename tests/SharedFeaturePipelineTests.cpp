@@ -52,11 +52,15 @@ int main() {
     SharedFeaturePipeline pipeline44100(44100.0);
     SharedFeaturePipeline pipeline48000(48000.0);
     SharedFeaturePipeline pipeline96000(96000.0);
+    SharedFeaturePipeline invalidRatePipeline(
+        std::numeric_limits<double>::quiet_NaN());
     check(!pipeline44100.isFrameAvailable(), "empty pipeline has no frame");
     check(pipeline44100.sampleRate() == 44100.0 &&
           pipeline48000.sampleRate() == 48000.0 &&
           pipeline96000.sampleRate() == 96000.0,
           "44.1, 48, and 96 kHz sample rates are retained");
+    check(invalidRatePipeline.sampleRate() == 44100.0,
+          "non-finite sample rate falls back to 44.1 kHz");
 
     std::array<float, SharedFeaturePipeline::kFftSize> mono{};
     for (std::size_t i = 0; i < mono.size(); ++i) {
