@@ -169,6 +169,25 @@ SNAP="$T/snapshots/20261114T120000Z"
 [ -s "$SNAP/ufw_status" ] && ok "snapshot captures UFW status output" || bad "snapshot captures UFW status output" missing present
 [ -s "$SNAP/RESULT" ] && ok "snapshot stores RESULT" || bad "snapshot stores RESULT" missing present
 [ -s "$SNAP/SHA256" ] && ok "snapshot stores SHA-256 manifest" || bad "snapshot stores SHA-256 manifest" missing present
+mode="$(stat -c '%a' "$SNAP")"
+eq "snapshot directory is owner-only" "$mode" 700
+
+# A successful probe with empty output is recorded as empty, not as captured data.
+env -i PATH="$BIN" HOME="$T" SPP_CASE=none \
+  SPP_OS_RELEASE_FILE="$T/os-release" SPP_SYSTEMD_RUNTIME_DIR="$T/systemd" \
+  SPP_SNAPSHOT_DIR="$T/empty-snapshots" /bin/bash "$SCRIPT" >/dev/null 2>/dev/null || true
+EMPTY_SNAP="$T/empty-snapshots/20261114T120000Z"
+grep -q 'nft_ruleset:empty-output' "$EMPTY_SNAP/RESULT" \
+  && ok "empty nft output is reported" || bad "empty nft output is reported" missing present
+
+# Reusing a timestamp must not overwrite an existing snapshot.
+before_hash="$(sha256sum "$SNAP/RESULT")"
+env -i PATH="$BIN" HOME="$T" SPP_CASE=fw-confirmed \
+  SPP_OS_RELEASE_FILE="$T/os-release" SPP_SYSTEMD_RUNTIME_DIR="$T/systemd" \
+  SPP_SNAPSHOT_DIR="$T/snapshots" /bin/bash "$SCRIPT" >/dev/null 2>/dev/null || true
+after_hash="$(sha256sum "$SNAP/RESULT")"
+eq "existing snapshot is not overwritten" "$after_hash" "$before_hash"
+
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
