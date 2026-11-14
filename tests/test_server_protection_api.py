@@ -89,7 +89,7 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
 
     def test_unblock_reports_partial_failure_when_allow_add_fails(self):
-        with patch.object(api, "csf_deny_remove", return_value=(True, "deny removed")), \\
+        with patch.object(api, "csf_deny_remove", return_value=(True, "deny removed")), \
              patch.object(api, "csf_allow", return_value=(False, "allow failed")):
             status, payload = self.request(
                 "/api/unblock", origin=next(iter(api.ALLOWED_ORIGINS)),
@@ -101,7 +101,7 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         self.assertEqual(payload["stage"], "allow_add")
 
     def test_unblock_success_requires_both_csf_operations(self):
-        with patch.object(api, "csf_deny_remove", return_value=(True, "deny removed")), \\
+        with patch.object(api, "csf_deny_remove", return_value=(True, "deny removed")), \
              patch.object(api, "csf_allow", return_value=(True, "allow added")):
             status, payload = self.request(
                 "/api/unblock", origin=next(iter(api.ALLOWED_ORIGINS)),
