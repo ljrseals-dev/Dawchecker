@@ -12,6 +12,11 @@ cat > "$TMP/empty/dirname" <<'SH'
 exec /usr/bin/dirname "$@"
 SH
 chmod +x "$TMP/empty/dirname"
+cat > "$TMP/empty/grep" <<'SH'
+#!/bin/sh
+exec /usr/bin/grep "$@"
+SH
+chmod +x "$TMP/empty/grep"
 
 # Missing cron and systemd tools must be a warning-only, successful path.
 missing_output="$(
