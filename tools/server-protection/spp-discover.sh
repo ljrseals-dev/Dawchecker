@@ -97,8 +97,33 @@ fi
 # or chain proves rules exist, not that the corresponding tool owns the host.
 NFT_RULES_PRESENT=no
 case "$nft_rules" in *"table "*) NFT_RULES_PRESENT=yes ;; esac
+# A third-party table alone must not be attributed to an active nftables
+# service. Require at least one non-Docker/non-CrowdSec table as ownership
+# evidence; mixed rulesets remain visible but are treated conservatively.
+NFT_NON_THIRDPARTY_RULES=no
+while IFS= read -r line; do
+    case "$line" in
+        "table "*)
+            case "$line" in
+                "table inet docker"*|"table ip docker"*|"table ip6 docker"*|                "table inet crowdsec"*|"table ip crowdsec"*|"table ip6 crowdsec"*) ;;
+                *) NFT_NON_THIRDPARTY_RULES=yes ;;
+            esac
+            ;;
+    esac
+done <<< "$nft_rules"
 IPTABLES_RULES_PRESENT=no
 case "$ipt_rules" in *"-A "*) IPTABLES_RULES_PRESENT=yes ;; esac
+IPTABLES_NON_THIRDPARTY_RULES=no
+while IFS= read -r line; do
+    case "$line" in
+        "-A "*)
+            case "$line" in
+                *"-j DOCKER"*|*"-j CROWDSEC"*) ;;
+                *) IPTABLES_NON_THIRDPARTY_RULES=yes ;;
+            esac
+            ;;
+    esac
+done <<< "$ipt_rules"
 
 NFT_FIREWALLD=no NFT_UFW=no
 while IFS= read -r line; do
@@ -124,7 +149,9 @@ esac
 
 FW_ACTIVE=0 UFW_ACTIVE=0 NFT_SERVICE_ACTIVE=0 IPT_SERVICE_ACTIVE=0
 svc_active firewalld && FW_ACTIVE=1
-svc_active ufw && UFW_ACTIVE=1
+# UFW is not a persistent daemon on common Ubuntu releases. Its own active
+# status plus its rule signature is stronger evidence than a systemd unit.
+case "$ufw_status" in *"Status: active"*) UFW_ACTIVE=1 ;; esac
 svc_active nftables && NFT_SERVICE_ACTIVE=1
 if svc_active netfilter-persistent || svc_active iptables; then IPT_SERVICE_ACTIVE=1; fi
 
@@ -137,10 +164,10 @@ if [ "$UFW_ACTIVE" -eq 1 ] && [[ "$ufw_status" == *"Status: active"* ]]    && { 
 fi
 # Standalone managers require both an active manager service and a non-empty
 # ruleset. Generic application-owned rules alone never establish ownership.
-if [ "$NFT_SERVICE_ACTIVE" -eq 1 ] && [ "$NFT_RULES_PRESENT" = yes ]    && [ "$NFT_FIREWALLD" = no ] && [ "$NFT_UFW" = no ]; then
+if [ "$NFT_SERVICE_ACTIVE" -eq 1 ] && [ "$NFT_RULES_PRESENT" = yes ]    && [ "$NFT_NON_THIRDPARTY_RULES" = yes ]    && [ "$NFT_FIREWALLD" = no ] && [ "$NFT_UFW" = no ]; then
     NFT_OWNS=1
 fi
-if [ "$IPT_SERVICE_ACTIVE" -eq 1 ] && [ "$IPTABLES_RULES_PRESENT" = yes ]    && [ "$IPT_FIREWALLD" = no ] && [ "$IPT_UFW" = no ]; then
+if [ "$IPT_SERVICE_ACTIVE" -eq 1 ] && [ "$IPTABLES_RULES_PRESENT" = yes ]    && [ "$IPTABLES_NON_THIRDPARTY_RULES" = yes ]    && [ "$IPT_FIREWALLD" = no ] && [ "$IPT_UFW" = no ]; then
     IPT_OWNS=1
 fi
 
