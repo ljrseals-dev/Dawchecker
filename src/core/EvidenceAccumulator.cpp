@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <utility>
 
 namespace dawchecker::dsp {
 
