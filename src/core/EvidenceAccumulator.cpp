@@ -36,6 +36,10 @@ void EvidenceAccumulator::relate(const std::string& parentId,
 }
 
 void EvidenceAccumulator::accumulateEvidenceScores() {
+    for (auto& entry : records_) {
+        entry.second.accumulated_score = entry.second.base_score;
+    }
+
     for (auto& [parentId, childLinks] : links_) {
         const auto parent = records_.find(parentId);
         if (parent == records_.end()) continue;
