@@ -35,6 +35,7 @@ let bans = [{
   active: true
 }];
 let whitelist = [];
+let failUnblock = false;
 const calls = [];
 
 async function fetchMock(url, init) {
@@ -60,6 +61,9 @@ async function fetchMock(url, init) {
     return { ok: true, status: 200, json: async () => ({ whitelist }) };
   }
   if (pathname === '/api/unblock' && method === 'POST') {
+    if (failUnblock) {
+      return { ok: false, status: 503, json: async () => ({ error: 'API unavailable' }) };
+    }
     const payload = JSON.parse(init.body);
     bans = bans.filter(item => item.ip !== payload.ip);
     whitelist = whitelist.concat([{ entry: payload.ip, type: 'ip' }]);
@@ -112,6 +116,19 @@ async function flush() {
   assert.deepEqual(JSON.parse(unblock.body), { ip: '203.0.113.10' });
   assert.equal(getElementById('banList').innerHTML, '', 'ban list refreshes after unblock');
   assert.match(getElementById('wlList').innerHTML, /203\.0\.113\.10/, 'whitelist refreshes after unblock');
+
+  bans = [{
+    ip: '203.0.113.11', cc: 'ZZ', org: 'API failure test',
+    set: 'TEST', hits: 1, active: true
+  }];
+  await context.refreshFromApi();
+  context.selectBan(0);
+  failUnblock = true;
+  await context.doUnblock();
+  assert.match(getElementById('banList').innerHTML, /203\.0\.113\.11/,
+    'failed API mutation does not locally remove the ban');
+  assert.equal(whitelist.length, 1,
+    'failed API mutation does not locally add a whitelist entry');
 
   console.log('Dashboard API integration tests passed.');
 })().catch(error => {
