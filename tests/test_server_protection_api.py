@@ -173,6 +173,9 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
                 handle.write("# header\n\n")
                 for index in range(100_005):
                     handle.write(f"192.0.2.{index}\n")
+            self.assertGreater(deny_file.stat().st_size, 1_000_000)
+            with deny_file.open("r", encoding="utf-8") as verify_handle:
+                self.assertEqual(sum(1 for _ in verify_handle), 100_007)
             self.assertEqual(api.count_csf_file_entries(str(deny_file)), 100_005)
 
     def test_panic_reports_partial_failure(self):
