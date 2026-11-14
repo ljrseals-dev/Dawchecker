@@ -27,6 +27,7 @@
 #include "core/ForensicHash.h"
 #include "core/SharedFeaturePipeline.h"
 #include "core/RealtimeEvidenceQueue.h"
+#include "core/EvidenceAccumulator.h"
 
 // VST3 SDK Core Structural Includes
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
@@ -44,6 +45,7 @@ using dawchecker::dsp::FrameAnalysisResult;
 using dawchecker::dsp::SharedFeaturePipeline;
 using dawchecker::dsp::RealtimeEvidenceEvent;
 using dawchecker::dsp::RealtimeEvidenceQueue;
+using dawchecker::dsp::EvidenceAccumulator;
 
 // Unique identifier for the monolithic plugin class factory
 static const FUID kDawCheckerMonolithUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
@@ -58,113 +60,6 @@ enum {
 // ============================================================================
 // 1. DATA STRUCTURE TYPES & SYSTEM ENUMS
 // ============================================================================
-
-enum class EvidenceScoreBand { StrongSignal, ElevatedSignal, Indeterminate, WeakSignal, MinimalSignal };
-enum class AntiForensicMethod { AddedNoise, DitherMasking, Recompression, SpectralPainting, PhaseRandomization, None };
-enum class ContainerType { WAV, FLAC, MP3, AAC, Unknown };
-
-struct AudioFeatureContext {
-    std::vector<float> magnitudes;
-    std::vector<float> phases;
-    std::vector<float> instantaneous_frequencies;
-    float spectral_centroid;
-    float spectral_flux;
-};
-
-
-struct ContainerEvidence {
-    ContainerType type;
-    bool has_valid_headers;
-    bool chunk_padding_anomaly;
-    float disruption_score;
-    std::string encoder_signature;
-};
-
-// ============================================================================
-// 2. EVIDENCE ACCUMULATOR
-// ============================================================================
-
-struct EvidenceRecord {
-    std::string id;
-    float base_score = 0.0f;
-    float accumulated_score = 0.0f;
-    std::string narrative_summary;
-    EvidenceScoreBand band = EvidenceScoreBand::Indeterminate;
-};
-
-class EvidenceAccumulator {
-public:
-    EvidenceAccumulator() {
-        addEvidence("root_provenance", 0.5f, "Initial system baseline analysis trace.");
-    }
-
-    void addEvidence(const std::string& id, float score,
-                     const std::string& narrative) {
-        const float boundedScore = std::clamp(score, 0.0f, 1.0f);
-        EvidenceRecord record;
-        record.id = id;
-        record.base_score = boundedScore;
-        record.accumulated_score = boundedScore;
-        record.narrative_summary = narrative;
-
-        if (boundedScore > 0.85f) record.band = EvidenceScoreBand::StrongSignal;
-        else if (boundedScore > 0.65f) record.band = EvidenceScoreBand::ElevatedSignal;
-        else if (boundedScore > 0.35f) record.band = EvidenceScoreBand::Indeterminate;
-        else if (boundedScore > 0.15f) record.band = EvidenceScoreBand::WeakSignal;
-        else record.band = EvidenceScoreBand::MinimalSignal;
-
-        records_[id] = record;
-    }
-
-    void relate(const std::string& parentId, const std::string& childId,
-                float weight) {
-        links_[parentId].push_back({childId, std::clamp(weight, 0.0f, 1.0f)});
-    }
-
-    void accumulateEvidenceScores() {
-        for (auto& [parentId, childLinks] : links_) {
-            const auto parent = records_.find(parentId);
-            if (parent == records_.end()) continue;
-            const float parentScore = parent->second.accumulated_score;
-
-            for (const auto& link : childLinks) {
-                const auto childIt = records_.find(link.child_id);
-                if (childIt == records_.end()) continue;
-                auto& child = childIt->second;
-
-                const float numerator =
-                    child.base_score * link.weight * parentScore;
-                const float denominator =
-                    (child.base_score * parentScore) +
-                    ((1.0f - parentScore) * 0.5f);
-                const float updated = denominator > 0.0f
-                    ? numerator / denominator
-                    : child.base_score;
-                child.accumulated_score = std::clamp(updated, 0.0f, 1.0f);
-            }
-        }
-    }
-
-    std::string generateForensicNarrative() {
-        accumulateEvidenceScores();
-        std::stringstream stream;
-        stream << "=== FORENSIC EVIDENCE SUMMARY ===\n";
-        for (const auto& [id, record] : records_) {
-            stream << "Record [" << id << "] -> Score: "
-                   << (record.accumulated_score * 100.0f) << "%\n"
-                   << "   Narrative: " << record.narrative_summary << "\n";
-        }
-        return stream.str();
-    }
-
-private:
-    struct EvidenceLink {
-        std::string child_id;
-        float weight;
-    };
-    std::unordered_map<std::string, EvidenceRecord> records_;
-    std::unordered_map<std::string, std::vector<EvidenceLink>> links_;
-};
 
 // ============================================================================
 // 3. REAL-TIME CORE FORENSIC DSP PIPELINE
