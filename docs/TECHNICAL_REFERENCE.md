@@ -158,13 +158,13 @@ Controlled by atomics on `MSV_Engine`; applied inside `process()` when not bypas
 - The spectral split is relative to half the Nyquist range, not a fixed-Hz cutoff.
 - `EvidenceAccumulator` uses bounded weighted score blending; it is not a Bayesian model and does not produce posterior probabilities.
 - `audio_pipeline_tests` checks 44.1/48/96 kHz configuration, frame availability, ring wrap/overflow, finite output, and zero heap allocations using a test-only global `operator new` counter.
-- `RealtimeEvidenceQueue` is a bounded SPSC queue. The audio thread only enqueues fixed-size events; the non-audio worker performs evidence-graph string/map updates. Full queues drop the newest event rather than block the producer.
+- `RealtimeEvidenceQueue` is a bounded SPSC queue and requires lock-free `size_t` atomics. The audio thread only enqueues fixed-size events; the non-audio worker performs evidence-graph string/map updates. Full queues drop the newest event rather than block the producer.
 
 ### 3.7 CodecScanner & AudioDeviceManager
 
 **Namespaces:** `dawchecker::codec`, `dawchecker::audio`
 
-- Enumerate devices via **PortAudio** (`DAWCHECKER_HAVE_PORTAUDIO`) or platform fallbacks (WASAPI / ALSA).
+- Enumerate devices via **PortAudio** (`DAWCHECKER_HAVE_PORTAUDIO`) or the implemented platform fallback paths.
 - Classify driver/codec strings against a known-substring table for the Codec panel.
 - Standalone app falls back to a **synthetic demo signal** if no capture device exists (GUI never blank).
 
@@ -176,7 +176,7 @@ Controlled by atomics on `MSV_Engine`; applied inside `process()` when not bypas
 |-----|---------|
 | `checkedMul` / `checkedAdd` | Overflow-safe size arithmetic |
 | `inBounds` | Index checks |
-| `isSafeExportPath` | Reject `..` traversal on export paths |
+| `isSafeExportPath` | Reject `..` traversal for callers; no complete export workflow is wired to it |
 | `secureZero` / `ScopedSecureBuffer` | Non-elidable buffer wipe |
 | `runStartupSelfCheck` | Informational ASLR / debugger / elevation report |
 
@@ -190,7 +190,7 @@ Controlled by atomics on `MSV_Engine`; applied inside `process()` when not bypas
 | Panel | File | Role |
 |-------|------|------|
 | Application | `Application.cpp` | GLFW window, ImGui, audio stream PIMPL, main loop |
-| DashboardPanel | `DashboardPanel.cpp` | Master tamper score, detector rows |
+| DashboardPanel | `DashboardPanel.cpp` | Master heuristic score, detector rows |
 | CodecPanel | `CodecPanel.cpp` | Device/codec findings |
 | ScanControls | `ScanControls.cpp` | Sensitivity, neutralizer toggles, rescan |
 | SpectrumView | `SpectrumView.cpp` | GUI-thread FFT display (not on audio thread) |
@@ -230,12 +230,11 @@ The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 - Mono pass-through, stereo processing, and safe fallback for mismatched or null channel buffers
 - Persistent bounded 80 Hz phase accumulator; phase advances independently of tone audibility
 - SHA-256 is provided by the separate `dawchecker_crypto` target; this plugin translation unit does not currently expose a hashing operation
-- No digital-signature generation or signer-identity claim; a digest alone does not prove provenance
 - Parameters: sensitivity, fusion threshold, anti-forensic gate
 
-**Factory:** class registration and UID are declared in the translation unit. This metadata has not been validated by an SDK-backed build.
+**Factory:** class registration and UID compile against the pinned Steinberg SDK in the compile-check workflow; host loading and runtime behavior are not verified.
 
-**Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_core` and the appropriate Steinberg SDK targets, and pass an SDK-backed build before VST3 integration is release-verified. A static source-contract test runs in CI but is not a substitute for compiling against the SDK. Link `dawchecker_crypto` only if a future plugin interface actually uses the hash API.
+**Verification boundary:** configure with `-DDAWCHECKER_BUILD_VST3_PLUGIN=ON -DVST3_SDK_ROOT=<sdk-root>` to compile the plugin translation unit against the SDK. CI fetches a pinned SDK revision and builds the `dawchecker_vst3_compilecheck` object target. This is a compile-only check: it does not link or package a `.vst3` bundle, load it in a host, or validate runtime audio behavior. The standalone build remains independent of the SDK.
 
 ---
 
@@ -345,13 +344,17 @@ cd tools/server-protection
 sudo ./install.sh
 ```
 
-Effects: CSF if missing; `LF_IPSET=1`; files under `/opt/server-protection`; symlinks in `/usr/local/bin`; cron every 2h for MSV; systemd enable+start.
+Effects: CSF if missing; `LF_IPSET=1`; files under `/opt/server-protection`; symlinks in `/usr/local/bin`; cron every 2h for MSV; systemd enable+start when systemd is available. Optional scanner packages may be unavailable and are reported as warnings.
 
 ### 9.3 Production constraints
 
 - Process **exits** if `csf` is not on `PATH`  
 - Mutations require root when `SPP_REQUIRE_ROOT=1` (default)  
-- No simulated success for missing ClamAV/rkhunter  
+- No simulated success for missing ClamAV/rkhunter
+- Mutating requests require JSON, a configured Origin, and a Host matching that origin's authority
+- JSON request bodies are limited to 16 KiB
+- The dashboard displays CSF deny counts, not a count-derived threat score
+- Panic actions report partial failure instead of unconditional success  
 
 ---
 
