@@ -1,8 +1,8 @@
 /**
  * ============================================================================
- * DAWCHECKER SECURE ULTIMATE — UNIFIED MONOLITHIC FORENSIC PLATFORM & VST3
+ * DAWCHECKER — AUDIO-FORENSICS VST3 PLUGIN COMPONENT
  * ============================================================================
- * This file contains the complete code for the DawChecker Secure Ultimate platform.
+ * This file implements the VST3 plugin component; the standalone application and shared analysis core live in separate source files.
  * It integrates real-time DSP, shared feature extraction pipelines, a 
  * Evidence score accumulation, SHA-256 hashing (not digital signing), and structural container scanners.
  * * Standards Compliance: C++20 standard, strict compilation hardening, zero stubs.
@@ -47,7 +47,7 @@ using dawchecker::dsp::RealtimeEvidenceEvent;
 using dawchecker::dsp::RealtimeEvidenceQueue;
 using dawchecker::dsp::EvidenceAccumulator;
 
-// Unique identifier for the monolithic plugin class factory
+// Stable identifier for the DawChecker VST3 plugin component.
 static const FUID kDawCheckerMonolithUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
 
 enum {
@@ -158,12 +158,12 @@ public:
         addAudioOutput(STR16("Forensic Pass-Through Output"), SpeakerArr::kStereo);
 
         parameters.addParameter(new RangeParameter(STR16("Detection Sensitivity"), kParamSensitivity, STR16("Scalar"), 0.0, 1.0, 0.5));
-        parameters.addParameter(new RangeParameter(STR16("Evidence Calibration Ceiling"), kParamFusionThreshold, STR16("%"), 0.0, 1.0, 0.65));
+        parameters.addParameter(new RangeParameter(STR16("Evidence Alert Threshold"), kParamFusionThreshold, STR16("%"), 0.0, 1.0, 0.65));
         parameters.addParameter(new RangeParameter(STR16("Anti-Forensic Mitigation Gate"), kParamAntiForensicGate, STR16("dB"), 0.0, 1.0, 0.25));
 
         pipeline_ = std::make_unique<SharedFeaturePipeline>(sample_rate_);
         fusion_engine_ = std::make_unique<EvidenceFusionEngine>();
-        evidence_accumulator_ = std::make_unique<EvidenceAccumulator>();
+        evidence_graph_ = std::make_unique<EvidenceAccumulator>();
 
         sensitivity_ = 0.5f;
         fusion_threshold_ = 0.65f;
@@ -245,18 +245,29 @@ public:
             }
         }
 
-        if (data.numSamples <= 0 || data.numInputs < 1 || data.numOutputs < 1 ||
-            data.inputs == nullptr || data.outputs == nullptr ||
-            data.inputs[0].numChannels <= 0 || data.outputs[0].numChannels <= 0 ||
-            data.inputs[0].channelBuffers32 == nullptr ||
+        if (data.numSamples <= 0) return kResultOk;
+        if (data.outputs == nullptr || data.numOutputs < 1 ||
+            data.outputs[0].numChannels <= 0 ||
             data.outputs[0].channelBuffers32 == nullptr) {
             return kResultOk;
         }
 
-        const auto& inputBus = data.inputs[0];
         auto& outputBus = data.outputs[0];
-        const int32 inputChannels = inputBus.numChannels;
         const int32 outputChannels = outputBus.numChannels;
+        if (data.inputs == nullptr || data.numInputs < 1 ||
+            data.inputs[0].numChannels <= 0 ||
+            data.inputs[0].channelBuffers32 == nullptr) {
+            for (int32 channel = 0; channel < outputChannels; ++channel) {
+                float* output = outputBus.channelBuffers32[channel];
+                if (output != nullptr) {
+                    std::fill_n(output, data.numSamples, 0.0f);
+                }
+            }
+            return kResultOk;
+        }
+
+        const auto& inputBus = data.inputs[0];
+        const int32 inputChannels = inputBus.numChannels;
         const float* in0 = inputChannels > 0 ? inputBus.channelBuffers32[0] : nullptr;
         const float* in1 = inputChannels > 1 ? inputBus.channelBuffers32[1] : nullptr;
         float* out0 = outputChannels > 0 ? outputBus.channelBuffers32[0] : nullptr;
@@ -323,15 +334,6 @@ public:
             for (int32 i = 0; i < data.numSamples; ++i) advanceTonePhase();
         }
 
-        if (data.outputParameterChanges != nullptr) {
-            int32 trackingIdx = 0;
-            if (auto* queue = data.outputParameterChanges->addParameterData(
-                    kParamFusionThreshold, trackingIdx)) {
-                int32 pointIdx = 0;
-                queue->addPoint(0, tamper_alert_state_, pointIdx);
-            }
-        }
-
         return kResultOk;
     }
 
@@ -374,12 +376,16 @@ private:
             }
             if (evidence_graph_ == nullptr) continue;
 
-            const std::string nodeId =
-                "realtime_dsp_node_" + std::to_string(event.sequence);
-            evidence_graph_->addNode(
-                nodeId, event.score,
-                "Discontinuity event transferred from the real-time audio queue.");
-            evidence_graph_->addEdge("root_provenance", nodeId, 0.85f);
+            try {
+                const std::string nodeId =
+                    "realtime_dsp_node_" + std::to_string(event.sequence);
+                evidence_graph_->addEvidence(
+                    nodeId, event.score,
+                    "Discontinuity event transferred from the real-time audio queue.");
+                evidence_graph_->relate("root_provenance", nodeId, 0.85f);
+            } catch (...) {
+                dropped_evidence_events_.fetch_add(1, std::memory_order_relaxed);
+            }
         }
     }
 
@@ -421,7 +427,7 @@ BEGIN_FACTORY_DEF("TheRealla Audio Forensic Labs",
     DEF_CLASS2(INLINE_UID_FROM_FUID(DawCheckerSecureUltimate::kDawCheckerMonolithUID),
                PClassInfo::kManyInstances,
                kVstAudioEffectClass,
-               "DawChecker Secure Monolith Ultimate",
+               "DawChecker Audio Forensics",
                Vst::kDistributable,          // classFlags (int) -- "kDistortion" was a fabricated constant here
                Vst::PlugType::kFxAnalyzer,   // subCategories (string) -- "Fx|Analyzer"
                "3.0.0",
