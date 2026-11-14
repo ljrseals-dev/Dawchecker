@@ -166,6 +166,15 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         self.assertNotIn("score", payload)
         self.assertNotIn("score_label", payload)
 
+    def test_bans_payload_contains_only_reported_metadata(self):
+        with patch.object(api, "read_csf_file", return_value=["203.0.113.7"]):
+            bans = api.get_bans()
+        self.assertEqual(bans, [{
+            "ip": "203.0.113.7",
+            "source": "csf.deny",
+            "active": True,
+        }])
+
     def test_csf_deny_count_streams_beyond_ban_list_limit(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             deny_file = Path(temp_dir) / "csf.deny"
