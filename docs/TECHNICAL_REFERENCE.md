@@ -206,7 +206,7 @@ Controlled by atomics on `MSV_Engine`; applied inside `process()` when not bypas
 | `accentCaution` | amber | Attention |
 | `accentAlert` | red | Tampering / alert only |
 
-Score labels: Clean ≤20 · Low-Level Artifacts ≤50 · Attention Recommended ≤80 · Tampering Detected >80.
+Standalone audio score labels: Clean ≤20 · Low-Level Artifacts ≤50 · Attention Recommended ≤80 · Tampering Detected >80. These are heuristic UI labels, not validated diagnostic thresholds.
 
 ### 4.2 Dependencies
 
@@ -245,7 +245,7 @@ The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 
 From `CMakeLists.txt` / `scripts/build_hardened.sh` (GCC/Clang):
 
-- `-fstack-protector-strong`, PIE, `-Wl,-z,relro,-z,now`
+- `-fstack-protector-strong`; Release executable link flags include `-pie` and `-Wl,-z,relro,-z,now`. The script reports ELF hardening checks on a best-effort basis; it does not fail the build when those checks are absent.
 - `-D_FORTIFY_SOURCE=2` (non-Debug)
 - Optional: `-fstack-clash-protection`, `-fcf-protection=full`
 - Post-build: sibling `dawchecker_secure.sha256`
@@ -321,7 +321,7 @@ No GoogleTest dependency (minimal harness).
 | File | Role |
 |------|------|
 | `server_protection_api.py` | Threading HTTP server + JSON API + static dashboard |
-| `dashboard/index.html` | Operator UI (production client, no mock bans) |
+| `dashboard/index.html` | Operator UI; lists and actions are API-backed, while host/device integrity data not exposed by the API is shown as unavailable |
 | `msv-blocklist-update.sh` | CSF blocklist definition updater |
 | `install.sh` | Packages, CSF, ipset config, cron, systemd |
 | `run_dashboard.sh` | Foreground start with CSF preflight |
@@ -351,7 +351,7 @@ Base URL: `http://127.0.0.1:8080/api`
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| GET | `/status` | — | Score, blocked totals, ipset map, jobs, root flag |
+| GET | `/status` | — | CSF deny-file count, named ipset counts, jobs, root flag; no risk score is calculated |
 | GET | `/bans` | — | Entries from `/etc/csf/csf.deny` |
 | GET | `/whitelist` | — | Entries from `/etc/csf/csf.allow` |
 | GET | `/logs` | — | Recent API log ring buffer |
