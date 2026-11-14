@@ -245,10 +245,10 @@ The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 
 From `CMakeLists.txt` / `scripts/build_hardened.sh` (GCC/Clang):
 
-- `-fstack-protector-strong`; Release executable link flags include `-pie` and `-Wl,-z,relro,-z,now`. The script reports ELF hardening checks on a best-effort basis; it does not fail the build when those checks are absent.
+- `-fstack-protector-strong`; non-Apple Unix builds also use `-fPIE`, while Release executable link flags include `-pie`, `-Wl,-z,relro,-z,now`, and `-Wl,-z,noexecstack`. The script reports ELF hardening checks on a best-effort basis; it does not fail the build when those checks are absent.
 - `-D_FORTIFY_SOURCE=2` (non-Debug)
 - Optional: `-fstack-clash-protection`, `-fcf-protection=full`
-- Post-build: sibling `dawchecker_secure.sha256`
+- `scripts/build_hardened.sh` writes a sibling `dawchecker_secure.sha256` only after build and registered tests succeed; direct CMake builds do not generate it.
 
 MSVC path: `/GS`, `/sdl`, `/GUARD:CF`, `/DYNAMICBASE`, `/NXCOMPAT`, `/HIGHENTROPYVA`.
 
@@ -277,7 +277,10 @@ Documented in `docs/HARDENING.md`:
 | `dawchecker_core` | Static core library |
 | `dawchecker_gui` | GUI + ImGui (if ImGui present) |
 | `dawchecker_secure` | Main executable |
-| `engine_tests` | Dependency-light tests |
+| `engine_tests` | Core engine tests |
+| `audio_pipeline_tests` | Shared feature pipeline and SPSC queue tests |
+| `evidence_accumulator_tests` | Evidence score accumulation tests |
+| `dawchecker_crypto` | OpenSSL EVP SHA-256 implementation (when crypto gate is enabled) |
 
 ImGui missing → core + tests still build; GUI skipped with warning.
 
@@ -294,8 +297,8 @@ ImGui missing → core + tests still build; GUI skipped with warning.
 
 ## 8. Testing
 
-**File:** `tests/EngineTests.cpp`  
-**Runner:** `ctest` / `engine_tests`
+**Files:** `tests/EngineTests.cpp`, `tests/SharedFeaturePipelineTests.cpp`, `tests/EvidenceAccumulatorTests.cpp`  
+**Runner:** CTest (`engine_tests`, `audio_pipeline_tests`, `evidence_accumulator_tests`)
 
 Coverage includes:
 
@@ -362,7 +365,7 @@ Base URL: `http://127.0.0.1:8080/api`
 | POST | `/refresh` | `{}` | `csf -r` |
 | POST | `/scan/clamav` | `{}` | Async ClamAV job |
 | POST | `/scan/rkhunter` | `{}` | Async rkhunter job |
-| POST | `/panic` | `{}` | Reload + scans + MSV update attempt |
+| POST | `/panic` | `{}` | CSF reload plus scan/update job attempts; reports partial failure rather than unconditional success |
 | POST | `/blocklist/update` | `{}` | Run `msv-blocklist-update.sh` |
 
 **Status codes:** `200` ok · `400` bad input · `403` need root · `503` CSF/tool missing · `500` execution failure.
