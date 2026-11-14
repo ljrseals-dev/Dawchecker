@@ -268,12 +268,7 @@ private:
 class DawCheckerProcessor : public SingleComponentEffect {
 public:
     DawCheckerProcessor() = default;
-    // Note: setControllerClass() doesn't exist on SingleComponentEffect --
-    // that method is for the split Component/EditController pattern where
-    // processor and controller are two separate classes with two UIDs.
-    // SingleComponentEffect deliberately merges both into one class using
-    // a single class ID (registered once, below, in the factory), so there
-    // is no separate controller class to point to.
+    ~DawCheckerProcessor() { stopEvidenceWorker(); }
 
     static FUnknown* createInstance(void*) {
         return (IAudioProcessor*)new DawCheckerProcessor();
@@ -290,7 +285,7 @@ public:
         parameters.addParameter(new RangeParameter(STR16("Evidence Calibration Ceiling"), kParamFusionThreshold, STR16("%"), 0.0, 1.0, 0.65));
         parameters.addParameter(new RangeParameter(STR16("Anti-Forensic Mitigation Gate"), kParamAntiForensicGate, STR16("dB"), 0.0, 1.0, 0.25));
 
-        pipeline_ = std::make_unique<SharedFeaturePipeline>(44100.0);
+        pipeline_ = std::make_unique<SharedFeaturePipeline>(sample_rate_);
         fusion_engine_ = std::make_unique<EvidenceFusionEngine>();
         evidence_graph_ = std::make_unique<EvidenceGraph>();
 
@@ -298,92 +293,163 @@ public:
         fusion_threshold_ = 0.65f;
         anti_forensic_gate_ = 0.25f;
         tamper_alert_state_ = 0.0f;
+        worker_stop_.store(false, std::memory_order_release);
+        try {
+            evidence_worker_ = std::thread(&DawCheckerProcessor::evidenceWorkerLoop, this);
+        } catch (...) {
+            evidence_graph_.reset();
+            fusion_engine_.reset();
+            pipeline_.reset();
+            return kResultFalse;
+        }
 
         return kResultOk;
     }
 
     tresult PLUGIN_API terminate() override {
+        stopEvidenceWorker();
         pipeline_.reset();
         fusion_engine_.reset();
         evidence_graph_.reset();
         return SingleComponentEffect::terminate();
     }
 
-    tresult PLUGIN_API setBusArrangements(SpeakerArrangement* ins, int32 numIns, 
+    tresult PLUGIN_API setBusArrangements(SpeakerArrangement* ins, int32 numIns,
                                           SpeakerArrangement* outs, int32 numOuts) override {
-        if (numIns == 1 && numOuts == 1 && ins[0] == SpeakerArr::kStereo && outs[0] == SpeakerArr::kStereo) {
-            return SingleComponentEffect::setBusArrangements(ins, numIns, outs, numOuts);
+        if (ins == nullptr || outs == nullptr || numIns != 1 || numOuts != 1) {
+            return kResultFalse;
         }
-        return kResultFalse;
+        const bool inputSupported =
+            ins[0] == SpeakerArr::kMono || ins[0] == SpeakerArr::kStereo;
+        const bool outputSupported =
+            outs[0] == SpeakerArr::kMono || outs[0] == SpeakerArr::kStereo;
+        if (!inputSupported || !outputSupported) return kResultFalse;
+        return SingleComponentEffect::setBusArrangements(ins, numIns, outs, numOuts);
     }
 
     tresult PLUGIN_API setupProcessing(ProcessSetup& setup) override {
-        if (setup.sampleRate > 0) {
-            pipeline_ = std::make_unique<SharedFeaturePipeline>(setup.sampleRate);
+        if (!std::isfinite(setup.sampleRate) || setup.sampleRate <= 0.0) {
+            return kResultFalse;
         }
-        return SingleComponentEffect::setupProcessing(setup);
+        tresult result = SingleComponentEffect::setupProcessing(setup);
+        if (result != kResultOk) return result;
+
+        sample_rate_ = setup.sampleRate;
+        tone_phase_increment_ = (2.0 * 3.14159265358979323846 * 80.0) /
+                                sample_rate_;
+        pipeline_ = std::make_unique<SharedFeaturePipeline>(sample_rate_);
+        return kResultOk;
     }
 
     tresult PLUGIN_API process(ProcessData& data) override {
-        if (data.inputParameterChanges) {
-            int32 totalParamChanges = data.inputParameterChanges->getParameterCount();
+        if (data.inputParameterChanges != nullptr) {
+            const int32 totalParamChanges =
+                data.inputParameterChanges->getParameterCount();
             for (int32 i = 0; i < totalParamChanges; ++i) {
-                if (auto* queue = data.inputParameterChanges->getParameterData(i)) {
-                    int32 points = queue->getPointCount();
-                    ParamValue val;
-                    int32 sampleOffset;
-                    if (queue->getPoint(points - 1, sampleOffset, val) == kResultTrue) {
-                        switch (queue->getParameterId()) {
-                            case kParamSensitivity:     sensitivity_ = static_cast<float>(val); break;
-                            case kParamFusionThreshold: fusion_threshold_ = static_cast<float>(val); break;
-                            case kParamAntiForensicGate: anti_forensic_gate_ = static_cast<float>(val); break;
-                        }
-                    }
+                auto* queue = data.inputParameterChanges->getParameterData(i);
+                if (queue == nullptr) continue;
+                const int32 points = queue->getPointCount();
+                if (points <= 0) continue;
+
+                ParamValue value = 0.0;
+                int32 sampleOffset = 0;
+                if (queue->getPoint(points - 1, sampleOffset, value) != kResultTrue ||
+                    !std::isfinite(value)) {
+                    continue;
+                }
+
+                const float normalized =
+                    std::clamp(static_cast<float>(value), 0.0f, 1.0f);
+                switch (queue->getParameterId()) {
+                    case kParamSensitivity: sensitivity_ = normalized; break;
+                    case kParamFusionThreshold: fusion_threshold_ = normalized; break;
+                    case kParamAntiForensicGate: anti_forensic_gate_ = normalized; break;
+                    default: break;
                 }
             }
         }
 
-        if (data.numInputs == 0 || data.numOutputs == 0 || data.numSamples == 0) {
+        if (data.numSamples <= 0 || data.numInputs < 1 || data.numOutputs < 1 ||
+            data.inputs == nullptr || data.outputs == nullptr ||
+            data.inputs[0].numChannels <= 0 || data.outputs[0].numChannels <= 0 ||
+            data.inputs[0].channelBuffers32 == nullptr ||
+            data.outputs[0].channelBuffers32 == nullptr) {
             return kResultOk;
         }
 
-        float* inL = data.inputs[0].channelBuffers32[0];
-        float* outL = data.outputs[0].channelBuffers32[0];
-        float* outR = data.outputs[0].channelBuffers32[1];
+        const auto& inputBus = data.inputs[0];
+        auto& outputBus = data.outputs[0];
+        const int32 inputChannels = inputBus.numChannels;
+        const int32 outputChannels = outputBus.numChannels;
+        const float* in0 = inputChannels > 0 ? inputBus.channelBuffers32[0] : nullptr;
+        const float* in1 = inputChannels > 1 ? inputBus.channelBuffers32[1] : nullptr;
+        float* out0 = outputChannels > 0 ? outputBus.channelBuffers32[0] : nullptr;
+        float* out1 = outputChannels > 1 ? outputBus.channelBuffers32[1] : nullptr;
 
-        pipeline_->writeSamples(inL, data.numSamples);
+        const bool validStereo =
+            inputChannels >= 2 && outputChannels >= 2 &&
+            in0 != nullptr && in1 != nullptr &&
+            out0 != nullptr && out1 != nullptr;
 
-        while (pipeline_->isFrameAvailable()) {
-            FrameAnalysisResult frame_res = pipeline_->processNextFrame(sensitivity_, anti_forensic_gate_);
-            
-            float probability = fusion_engine_->calculateTamperCertainty(
-                frame_res.phase_coherence, 
-                frame_res.high_freq_anomaly, 
-                sensitivity_
-            );
-
-            if (probability > fusion_threshold_ || frame_res.splice_flag) {
-                tamper_alert_state_ = 1.0f;
-                evidence_graph_->addNode("realtime_dsp_node", probability, "Discontinuity flag registered inside real-time STFT signal block window loop.");
-                evidence_graph_->addEdge("root_provenance", "realtime_dsp_node", 0.85f);
+        if (pipeline_ != nullptr && fusion_engine_ != nullptr) {
+            if (validStereo) {
+                pipeline_->writeStereoSamples(in0, in1,
+                    static_cast<std::size_t>(data.numSamples));
             } else {
-                tamper_alert_state_ *= 0.93f; // Smooth exponential stabilization decay
+                const float* analysisInput = in0 != nullptr ? in0 : in1;
+                if (analysisInput != nullptr) {
+                    pipeline_->writeSamples(analysisInput,
+                        static_cast<std::size_t>(data.numSamples));
+                }
+            }
+            analyzeAvailableFrames();
+        }
+
+        if (validStereo) {
+            constexpr double twoPi = 6.28318530717958647692;
+            for (int32 i = 0; i < data.numSamples; ++i) {
+                const float trackingTone = tamper_alert_state_ > 0.15f
+                    ? 0.015f * static_cast<float>(std::sin(tone_phase_))
+                    : 0.0f;
+                out0[i] = in0[i] + trackingTone;
+                out1[i] = in1[i] - trackingTone;
+
+                // Advance phase even when the tracking tone is inaudible.
+                tone_phase_ += tone_phase_increment_;
+                if (tone_phase_ >= twoPi) tone_phase_ -= twoPi;
+            }
+        } else {
+            // Safe fallback for mono, mismatched, or partially-null channel layouts.
+            // Mono input is duplicated to additional outputs; missing inputs become silence.
+            for (int32 channel = 0; channel < outputChannels; ++channel) {
+                float* output = outputBus.channelBuffers32[channel];
+                if (output == nullptr) continue;
+
+                const float* source = nullptr;
+                if (inputChannels == 1) {
+                    source = in0;
+                } else if (outputChannels == 1 && inputChannels >= 2 &&
+                           in0 != nullptr && in1 != nullptr) {
+                    for (int32 i = 0; i < data.numSamples; ++i) {
+                        output[i] = 0.5f * (in0[i] + in1[i]);
+                    }
+                    continue;
+                } else if (channel < inputChannels) {
+                    source = inputBus.channelBuffers32[channel];
+                }
+
+                if (source != nullptr) {
+                    for (int32 i = 0; i < data.numSamples; ++i) output[i] = source[i];
+                } else {
+                    for (int32 i = 0; i < data.numSamples; ++i) output[i] = 0.0f;
+                }
             }
         }
 
-        // Sub-harmonic signaling trace injection loop
-        for (int32 i = 0; i < data.numSamples; ++i) {
-            float clean_sample = inL[i];
-            float tracking_tone = (tamper_alert_state_ > 0.15f) ? 
-                (0.015f * std::sin(2.0f * M_PI * i * 80.0f / 44100.0f)) : 0.0f;
-
-            outL[i] = clean_sample + tracking_tone;
-            outR[i] = clean_sample - tracking_tone;
-        }
-
-        if (data.outputParameterChanges) {
+        if (data.outputParameterChanges != nullptr) {
             int32 trackingIdx = 0;
-            if (auto* queue = data.outputParameterChanges->addParameterData(kParamFusionThreshold, trackingIdx)) {
+            if (auto* queue = data.outputParameterChanges->addParameterData(
+                    kParamFusionThreshold, trackingIdx)) {
                 int32 pointIdx = 0;
                 queue->addPoint(0, tamper_alert_state_, pointIdx);
             }
@@ -393,14 +459,70 @@ public:
     }
 
 private:
+    void analyzeAvailableFrames() noexcept {
+        if (pipeline_ == nullptr || fusion_engine_ == nullptr) return;
+        while (pipeline_->isFrameAvailable()) {
+            const FrameAnalysisResult frameResult =
+                pipeline_->processNextFrame(sensitivity_, anti_forensic_gate_);
+            const float probability = fusion_engine_->calculateTamperCertainty(
+                frameResult.phase_coherence,
+                frameResult.high_freq_anomaly,
+                sensitivity_);
+
+            if (probability > fusion_threshold_ || frameResult.splice_flag) {
+                tamper_alert_state_ = 1.0f;
+                const RealtimeEvidenceEvent event{probability, event_sequence_++};
+                if (!evidence_queue_.push(event)) {
+                    dropped_evidence_events_.fetch_add(1, std::memory_order_relaxed);
+                }
+            } else {
+                tamper_alert_state_ *= 0.93f;
+            }
+        }
+    }
+
+    void evidenceWorkerLoop() noexcept {
+        while (!worker_stop_.load(std::memory_order_acquire) ||
+               evidence_queue_.hasPending()) {
+            RealtimeEvidenceEvent event;
+            if (!evidence_queue_.pop(event)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            if (evidence_graph_ == nullptr) continue;
+
+            const std::string nodeId =
+                "realtime_dsp_node_" + std::to_string(event.sequence);
+            evidence_graph_->addNode(
+                nodeId, event.probability,
+                "Discontinuity event transferred from the real-time audio queue.");
+            evidence_graph_->addEdge("root_provenance", nodeId, 0.85f);
+        }
+    }
+
+    void stopEvidenceWorker() noexcept {
+        worker_stop_.store(true, std::memory_order_release);
+        if (evidence_worker_.joinable()) evidence_worker_.join();
+    }
+
     std::unique_ptr<SharedFeaturePipeline> pipeline_;
     std::unique_ptr<EvidenceFusionEngine> fusion_engine_;
     std::unique_ptr<EvidenceGraph> evidence_graph_;
+    RealtimeEvidenceQueue evidence_queue_{};
+    std::thread evidence_worker_{};
+    std::atomic<bool> worker_stop_{true};
+    std::atomic<std::uint64_t> dropped_evidence_events_{0};
+    std::uint64_t event_sequence_ = 0;
 
-    float sensitivity_;
-    float fusion_threshold_;
-    float anti_forensic_gate_;
-    float tamper_alert_state_;
+    double sample_rate_ = 44100.0;
+    double tone_phase_ = 0.0;
+    double tone_phase_increment_ =
+        (2.0 * 3.14159265358979323846 * 80.0) / 44100.0;
+
+    float sensitivity_ = 0.5f;
+    float fusion_threshold_ = 0.65f;
+    float anti_forensic_gate_ = 0.25f;
+    float tamper_alert_state_ = 0.0f;
 };
 
 } // namespace DawCheckerSecureUltimate
