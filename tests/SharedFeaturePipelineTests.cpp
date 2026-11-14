@@ -1,4 +1,5 @@
 #include "core/SharedFeaturePipeline.h"
+#include "core/RealtimeEvidenceQueue.h"
 
 #include <array>
 #include <atomic>
@@ -7,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <new>
+#include <thread>
 
 namespace {
 std::atomic<bool> g_track_allocations{false};
@@ -114,7 +116,46 @@ int main() {
     check(g_allocation_count.load(std::memory_order_relaxed) == 0,
           "stereo write and repeated analysis allocate no heap memory");
 
-    if (g_failures == 0) std::puts("All SharedFeaturePipeline tests passed.");
+    dawchecker::dsp::RealtimeEvidenceQueue queue;
+    dawchecker::dsp::RealtimeEvidenceEvent event{};
+    check(!queue.hasPending() && !queue.pop(event), "empty SPSC queue is empty");
+
+    for (std::size_t i = 0; i < dawchecker::dsp::RealtimeEvidenceQueue::kCapacity - 1; ++i) {
+        check(queue.push({static_cast<float>(i), static_cast<std::uint64_t>(i)}),
+              "SPSC queue accepts events up to its bounded capacity");
+    }
+    check(!queue.push({1.0f, 999}), "full SPSC queue rejects newest event without blocking");
+    check(queue.pop(event) && event.sequence == 0, "SPSC queue preserves FIFO order");
+    check(queue.push({1.0f, 999}), "SPSC queue reuses capacity after consumer pop");
+
+    dawchecker::dsp::RealtimeEvidenceQueue concurrentQueue;
+    constexpr std::uint64_t eventCount = 50000;
+    std::atomic<bool> producerDone{false};
+    std::atomic<int> sequenceErrors{0};
+    std::thread producer([&] {
+        for (std::uint64_t i = 0; i < eventCount; ++i) {
+            const dawchecker::dsp::RealtimeEvidenceEvent next{0.5f, i};
+            while (!concurrentQueue.push(next)) std::this_thread::yield();
+        }
+        producerDone.store(true, std::memory_order_release);
+    });
+    std::uint64_t expectedSequence = 0;
+    while (expectedSequence < eventCount) {
+        if (concurrentQueue.pop(event)) {
+            if (event.sequence != expectedSequence) {
+                sequenceErrors.fetch_add(1, std::memory_order_relaxed);
+            }
+            ++expectedSequence;
+        } else {
+            std::this_thread::yield();
+        }
+    }
+    producer.join();
+    check(producerDone.load(std::memory_order_acquire) &&
+          sequenceErrors.load(std::memory_order_relaxed) == 0,
+          "SPSC queue preserves ordering across concurrent producer and consumer");
+
+    if (g_failures == 0) std::puts("All audio pipeline and evidence queue tests passed.");
     else std::fprintf(stderr, "%d SharedFeaturePipeline test(s) failed.\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }
