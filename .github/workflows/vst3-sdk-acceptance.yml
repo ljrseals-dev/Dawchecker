@@ -1,0 +1,56 @@
+name: VST3 SDK Compile Check
+
+on:
+  push:
+    branches:
+      - "repair/**"
+    paths:
+      - "Source/dawchecker_vst3.cpp"
+      - "latest/dawchecker_vst3.cpp"
+      - "src/core/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/vst3-sdk-acceptance.yml"
+  pull_request:
+    paths:
+      - "Source/dawchecker_vst3.cpp"
+      - "latest/dawchecker_vst3.cpp"
+      - "src/core/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/vst3-sdk-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  vst3-sdk-compile:
+    runs-on: ubuntu-latest
+    env:
+      VST3_SDK_COMMIT: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+    steps:
+      - name: Checkout DawChecker
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libgl1-mesa-dev
+
+      - name: Fetch pinned Steinberg VST3 SDK and required submodules
+        run: |
+          git init "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" remote add origin https://github.com/steinbergmedia/vst3sdk.git
+          git -C "$RUNNER_TEMP/vst3sdk" fetch --depth 1 origin "$VST3_SDK_COMMIT"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout --detach FETCH_HEAD
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --depth 1 base pluginterfaces public.sdk
+
+      - name: Configure SDK-backed plugin compile check
+        run: |
+          cmake -S . -B build-vst3 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DDAWCHECKER_BUILD_VST3_PLUGIN=ON \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DDAWCHECKER_REQUIRE_CRYPTO=ON \
+            -DDAWCHECKER_USE_PORTAUDIO=OFF
+
+      - name: Compile VST3 plugin translation unit against Steinberg SDK
+        run: cmake --build build-vst3 --target dawchecker_vst3_compilecheck --parallel 2
