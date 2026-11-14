@@ -92,6 +92,30 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertFalse(payload["ok"])
 
+    def test_allowed_origin_with_unlisted_host_is_rejected(self):
+        status, payload = self.request(
+            "/api/unblock", origin=self.origin,
+            host="attacker.invalid", body={"ip": "192.0.2.1"},
+        )
+        self.assertEqual(status, 403)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "host not allowed")
+
+    def test_oversized_json_body_is_rejected(self):
+        status, payload = self.request(
+            "/api/unblock", origin=self.origin,
+            body={"padding": "x" * (api.MAX_JSON_BODY_BYTES + 1)},
+        )
+        self.assertEqual(status, 413)
+        self.assertFalse(payload["ok"])
+
+    def test_non_object_json_body_is_rejected(self):
+        status, payload = self.request(
+            "/api/unblock", origin=self.origin, body=["not", "an", "object"],
+        )
+        self.assertEqual(status, 400)
+        self.assertFalse(payload["ok"])
+
     def test_non_json_mutation_is_rejected(self):
         status, payload = self.request(
             "/api/unblock", origin=self.origin,
