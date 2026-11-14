@@ -128,6 +128,16 @@ int main() {
     check(queue.pop(event) && event.sequence == 0, "SPSC queue preserves FIFO order");
     check(queue.push({1.0f, 999}), "SPSC queue reuses capacity after consumer pop");
 
+    dawchecker::dsp::RealtimeEvidenceQueue allocationQueue;
+    g_allocation_count.store(0, std::memory_order_relaxed);
+    g_track_allocations.store(true, std::memory_order_release);
+    const bool queuedWithoutAllocation = allocationQueue.push({0.75f, 7});
+    const bool poppedWithoutAllocation = allocationQueue.pop(event);
+    g_track_allocations.store(false, std::memory_order_release);
+    check(queuedWithoutAllocation && poppedWithoutAllocation &&
+          g_allocation_count.load(std::memory_order_relaxed) == 0,
+          "SPSC queue producer and consumer operations allocate no heap memory");
+
     dawchecker::dsp::RealtimeEvidenceQueue concurrentQueue;
     constexpr std::uint64_t eventCount = 50000;
     std::atomic<bool> producerDone{false};
