@@ -296,6 +296,7 @@ if(DAWCHECKER_BUILD_VST3_PLUGIN)
     )
     target_link_libraries(dawchecker_vst3_compilecheck PRIVATE dawchecker_core)
     target_compile_features(dawchecker_vst3_compilecheck PRIVATE cxx_std_20)
+    target_compile_definitions(dawchecker_vst3_compilecheck PRIVATE DEVELOPMENT=1)
     set_target_properties(dawchecker_vst3_compilecheck PROPERTIES
         POSITION_INDEPENDENT_CODE ON
     )
