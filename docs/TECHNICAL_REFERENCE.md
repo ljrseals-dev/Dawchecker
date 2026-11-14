@@ -214,14 +214,14 @@ Single-component Steinberg VST3 effect (`SingleComponentEffect`):
 - Shared STFT-style feature pipeline (isolated DFT loop in reference implementation)
 - Platt-scaled fusion for tamper certainty
 - Bayesian-style evidence graph structures
-- SHA-256 (FIPS-oriented implementation in later revisions)
-- Non-cryptographic checksum block (explicitly **not** Ed25519 — documented as checksum only)
+- SHA-256 digest through the shared OpenSSL EVP implementation (`dawchecker_crypto`)
+- No digital-signature generation or signer-identity claim; a digest alone does not prove provenance
 - Parameters: sensitivity, fusion threshold, anti-forensic gate
 - Optional sub-harmonic (~80 Hz) tracking tone on alert for downstream recorders
 
 **Factory:** distributable analyzer-class registration; UID defined in translation unit.
 
-Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path).
+Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path). The current CMake project does not define a VST3 consumer target. Before release, the SDK-backed VST3 target must include `src/` and link `dawchecker_crypto` / `OpenSSL::Crypto`; until that target is added and built in CI, VST3 crypto integration remains a manual release blocker.
 
 ---
 
@@ -430,7 +430,7 @@ Treat automated scores as **decision support**. Preserve originals; export only 
 - Not a substitute for full lab chain-of-custody or expert testimony  
 - Ultrasonic/ENF/watermark signals depend on capture bandwidth and prior processing  
 - Neutralizers alter the signal — document when enabled  
-- VST3 checksum block is not a digital signature  
+- VST3 SHA-256 digest is not a digital signature and does not authenticate a signer  
 
 ### 13.2 Server toolkit
 
