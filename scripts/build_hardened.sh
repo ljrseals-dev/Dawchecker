@@ -26,6 +26,12 @@ echo "  Type: ${BUILD_TYPE}"
 echo "============================================================"
 echo
 
+# Invalidate stale checksum evidence before any step that can fail, including
+# dependency vendoring and CMake configuration.
+if [[ -d "${BUILD_DIR}" ]]; then
+    find "${BUILD_DIR}" -type f -name 'dawchecker_secure.sha256' -delete
+fi
+
 # ---------------------------------------------------------------------------
 # 1. Vendor Dear ImGui
 # ---------------------------------------------------------------------------
@@ -49,10 +55,6 @@ echo
 # ---------------------------------------------------------------------------
 # 3. Build
 # ---------------------------------------------------------------------------
-# Invalidate every known output sidecar before rebuilding. A failed build
-# must never leave an old checksum looking like evidence for a new binary.
-find "${BUILD_DIR}" -type f -name 'dawchecker_secure.sha256' -delete
-
 echo "→ Building (jobs=${JOBS})..."
 cmake --build "${BUILD_DIR}" --parallel "${JOBS}"
 echo
