@@ -30,6 +30,8 @@ class VST3SourceContractTests(unittest.TestCase):
         self.assertNotIn("ContainerEvidence", source)
         self.assertNotIn("ContainerType", source)
         self.assertIn('"DawChecker Audio Forensics"', source)
+        self.assertIn("BEGIN_FACTORY(", source)
+        self.assertNotIn("BEGIN_FACTORY_DEF", source)
 
 
 if __name__ == "__main__":
