@@ -45,6 +45,7 @@ prepare_project() {
   local project="$TMP/$name"
   mkdir -p "$project/scripts" "$project/build"
   cp "$ROOT/scripts/build_hardened.sh" "$project/scripts/build_hardened.sh"
+  chmod +x "$project/scripts/build_hardened.sh"
   cat > "$project/scripts/vendor_imgui.sh" <<'SH'
 #!/usr/bin/env bash
 exit 0
