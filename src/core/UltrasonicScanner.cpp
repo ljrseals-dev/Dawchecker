@@ -14,23 +14,41 @@ void UltrasonicScanner::prepare(double sampleRate)
 {
     sampleRate_ = std::isfinite(sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
     const double nyquist = sampleRate_ * 0.5;
+    activeBinCount_ = 0;
     for (std::size_t i = 0; i < bins_.size(); ++i)
     {
         auto& bin = bins_[i];
-        bin.freqHz = std::min(kBands[i], nyquist * 0.98);
-        bin.coeff  = 2.0 * std::cos(2.0 * M_PI * bin.freqHz / sampleRate_);
         bin.s1 = bin.s2 = 0.0;
+        if (kBands[i] >= nyquist)
+        {
+            // Do not silently retune a named ultrasonic band to a different
+            // in-band frequency when the host sample rate cannot represent it.
+            bin.freqHz = 0.0;
+            bin.coeff = 0.0;
+            continue;
+        }
+        bin.freqHz = kBands[i];
+        bin.coeff = 2.0 * std::cos(2.0 * M_PI * bin.freqHz / sampleRate_);
+        ++activeBinCount_;
     }
     smoothed_ = 0.0;
 }
 
 DetectorResult UltrasonicScanner::process(double liveSample) noexcept
 {
+    DetectorResult result;
+    if (activeBinCount_ == 0)
+    {
+        result.label = "Sample rate below ultrasonic scan range";
+        return result;
+    }
+
     double total = 0.0;
     double dominant = 0.0, dominantPower = -1.0;
 
     for (auto& bin : bins_)
     {
+        if (bin.freqHz <= 0.0) continue;
         const double s = liveSample + bin.coeff * bin.s1 - bin.s2;
         bin.s2 = bin.s1;
         bin.s1 = s;
@@ -41,7 +59,6 @@ DetectorResult UltrasonicScanner::process(double liveSample) noexcept
 
     smoothed_ += (total - smoothed_) * 0.003;
 
-    DetectorResult result;
     result.confidence = std::clamp(smoothed_ * 6000.0, 0.0, 100.0);
     result.locationHz = dominant;
 
