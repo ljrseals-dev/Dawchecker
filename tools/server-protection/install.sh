@@ -66,15 +66,56 @@ install_csf() {
     info "CSF already installed: $(command -v csf)"
     return 0
   fi
-  log "Installing CSF..."
+
+  local expected_sha="${CSF_SHA256:-}"
+  if [[ ! "$expected_sha" =~ ^[[:xdigit:]]{64}$ ]]; then
+    err "CSF is not installed. Set CSF_SHA256 to a 64-character digest verified independently from a trusted release source."
+    return 1
+  fi
+
+  log "Downloading CSF for checksum verification..."
   CSF_TMP_DIR="$(mktemp -d /tmp/server-protection-csf.XXXXXX)"
-  wget -q -O "$CSF_TMP_DIR/csf.tgz" https://download.configserver.com/csf.tgz
-  tar -xzf "$CSF_TMP_DIR/csf.tgz" -C "$CSF_TMP_DIR"
-  [[ -f "$CSF_TMP_DIR/csf/install.sh" ]] || { err "CSF archive did not contain install.sh"; exit 1; }
-  (cd "$CSF_TMP_DIR/csf" && sh install.sh)
-  command -v csf >/dev/null 2>&1 || { err "CSF install failed"; exit 1; }
-  log "CSF installed"
-}
+  local archive="$CSF_TMP_DIR/csf.tgz"
+  if ! wget -q -O "$archive" https://download.configserver.com/csf.tgz; then
+    err "CSF download failed"
+    return 1
+  fi
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    if ! printf '%s  %s\n' "$expected_sha" "$archive" | sha256sum --check --status; then
+      err "CSF archive SHA-256 does not match CSF_SHA256"
+      return 1
+    fi
+  elif command -v shasum >/dev/null 2>&1; then
+    local actual_sha
+    actual_sha="$(shasum -a 256 "$archive" | awk '{print $1}')"
+    if [[ "${actual_sha,,}" != "${expected_sha,,}" ]]; then
+      err "CSF archive SHA-256 does not match CSF_SHA256"
+      return 1
+    fi
+  else
+    err "sha256sum or shasum is required to verify the CSF archive"
+    return 1
+  fi
+
+  if ! tar -xzf "$archive" -C "$CSF_TMP_DIR"; then
+    err "CSF archive extraction failed"
+    return 1
+  fi
+  [[ -f "$CSF_TMP_DIR/csf/install.sh" ]] || {
+    err "CSF archive did not contain install.sh"
+    return 1
+  }
+  if ! (cd "$CSF_TMP_DIR/csf" && sh install.sh); then
+    err "CSF install script failed"
+    return 1
+  fi
+  command -v csf >/dev/null 2>&1 || {
+    err "CSF install did not create a csf executable"
+    return 1
+  }
+  log "CSF installed after SHA-256 verification"
+
 
 configure_csf() {
   log "Configuring CSF for ipset blocklists..."
