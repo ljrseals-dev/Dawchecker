@@ -363,15 +363,15 @@ Effects: CSF if already installed, or if a separately verified `CSF_SHA256` is s
 
 ## 10. HTTP API Reference
 
-Base URL: `http://127.0.0.1:8080/api`
+Base URL: `http://127.0.0.1:8080/api` (IPv4 loopback only; non-loopback and IPv6 binds are rejected)
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
-| GET | `/status` | — | CSF deny-file count, named ipset counts, jobs, root flag; no risk score is calculated |
-| GET | `/bans` | — | Entries from `/etc/csf/csf.deny` |
+| GET | `/status` | — | Streaming CSF deny-file entry count, named ipset counts, job summaries, root flag; no risk score is calculated |
+| GET | `/bans` | — | Entries from `/etc/csf/csf.deny`, with IP, source, and active state only |
 | GET | `/whitelist` | — | Entries from `/etc/csf/csf.allow` |
 | GET | `/logs` | — | Recent API log ring buffer |
-| GET | `/jobs` | — | Background job states |
+| GET | `/jobs` | — | Background job state, detail, start/finish timestamps, and process exit code |
 | POST | `/unblock` | `{"ip":"..."}` | `csf -dr` then `csf -a` |
 | POST | `/whitelist` | `{"entry":"..."}` | `csf -a` |
 | DELETE | `/whitelist` | `{"entry":"..."}` | `csf -ar` |
@@ -381,7 +381,7 @@ Base URL: `http://127.0.0.1:8080/api`
 | POST | `/panic` | `{}` | CSF reload plus scan/update job attempts; reports partial failure rather than unconditional success |
 | POST | `/blocklist/update` | `{}` | Run `msv-blocklist-update.sh` |
 
-**Status codes:** `200` ok · `400` bad input · `403` need root · `503` CSF/tool missing · `500` execution failure.
+**Status codes:** `200` ok · `400` bad input · `403` rejected Host/Origin or insufficient privilege · `413` body too large · `415` non-JSON mutation · `503` CSF/tool missing · `500` execution failure.
 
 **Validation:** IPv4, optional CIDR, or domain; rejects empty/overlong strings.
 
