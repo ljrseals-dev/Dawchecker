@@ -344,7 +344,7 @@ cd tools/server-protection
 sudo ./install.sh
 ```
 
-Effects: CSF if missing; `LF_IPSET=1`; files under `/opt/server-protection`; symlinks in `/usr/local/bin`; cron every 2h for MSV; systemd enable+start when systemd is available. Optional scanner packages may be unavailable and are reported as warnings.
+Effects: CSF if already installed, or if a separately verified `CSF_SHA256` is supplied; the installer checks the archive before executing it as root. It then configures `LF_IPSET=1`, installs files under `/opt/server-protection`, creates symlinks, schedules MSV updates every 2h, and enables systemd when available. Optional scanner packages may be unavailable and are reported as warnings.
 
 ### 9.3 Production constraints
 
@@ -354,6 +354,7 @@ Effects: CSF if missing; `LF_IPSET=1`; files under `/opt/server-protection`; sym
 - Mutating requests require JSON, a configured Origin, and a Host matching that origin's authority
 - JSON request bodies are limited to 16 KiB
 - The dashboard displays CSF deny counts, not a count-derived threat score
+- CSF is downloaded and executed only after a separately supplied SHA-256 digest matches; no upstream digest is invented or inferred
 - Panic actions report partial failure instead of unconditional success  
 
 ---
