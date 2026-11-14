@@ -105,6 +105,8 @@ async function flush() {
   assert.equal(getElementById('scoreSt').textContent, 'CSF DENY ENTRIES',
     'dashboard does not turn firewall counts into a threat score');
   assert.equal(getElementById('apiStatusValue').textContent, 'LIVE');
+  assert.match(getElementById('denyCount').textContent, /12 entries in csf\.deny/,
+    'deny count comes from the status endpoint, not the 2000-row list cap');
   assert.match(getElementById('banList').innerHTML, /&lt;img/);
   assert.doesNotMatch(getElementById('banList').innerHTML, /<img/);
 
