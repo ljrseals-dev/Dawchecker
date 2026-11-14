@@ -3,28 +3,21 @@
  * DAWCHECKER — AUDIO-FORENSICS VST3 PLUGIN COMPONENT
  * ============================================================================
  * This file implements the VST3 plugin component; the standalone application and shared analysis core live in separate source files.
- * It integrates real-time DSP, shared feature extraction pipelines, a 
- * Evidence score accumulation, SHA-256 hashing (not digital signing), and structural container scanners.
- * * Standards Compliance: C++20 standard, strict compilation hardening, zero stubs.
+ * It integrates real-time feature analysis, heuristic evidence scoring, and
+ * asynchronous evidence accumulation. SHA-256 is provided by a separate
+ * library; this plugin translation unit does not expose a hashing operation.
  * ============================================================================
  */
 
-#include <vector>
 #include <string>
-#include <complex>
 #include <cmath>
-#include <numeric>
 #include <algorithm>
 #include <memory>
-#include <array>
-#include <unordered_map>
-#include <sstream>
 #include <cstdint>
 #include <chrono>
 #include <atomic>
 #include <thread>
 
-#include "core/ForensicHash.h"
 #include "core/SharedFeaturePipeline.h"
 #include "core/RealtimeEvidenceQueue.h"
 #include "core/EvidenceAccumulator.h"
@@ -83,59 +76,6 @@ private:
     double alpha_;
     double beta_;
 };
-
-// ============================================================================
-// 5. FORENSIC HASHING — SHA-256 ONLY (NO DIGITAL SIGNATURE)
-// ============================================================================
-
-struct ForensicManifest {
-    std::string case_id;
-    std::uint64_t timestamp;
-    std::vector<std::uint8_t> sha256_hash;
-    std::string log_narrative;
-};
-
-// This adapter delegates to the shared EVP implementation in dawchecker_crypto.
-// A SHA-256 digest provides integrity identification; it is not a signature and
-// does not establish signer identity or authenticity.
-class ForensicHasher {
-public:
-    static std::vector<std::uint8_t> computeSHA256(
-        const std::vector<std::uint8_t>& input) {
-        return dawchecker::forensic::sha256(input);
-    }
-};
-
-// ============================================================================
-// 6. STRUCTURAL CONTAINER FORENSICS VALIDATOR
-// ============================================================================
-
-class ContainerForensics {
-public:
-    static ContainerEvidence parseBinaryHeader(const std::vector<uint8_t>& headerData) {
-        ContainerEvidence report{ContainerType::Unknown, false, false, 0.0f, "Unrecognized Header Block"};
-        
-        if (headerData.size() < 12) return report;
-
-        if (headerData[0] == 'R' && headerData[1] == 'I' && headerData[2] == 'F' && headerData[3] == 'F') {
-            report.type = ContainerType::WAV;
-            report.has_valid_headers = true;
-            report.encoder_signature = "Linear Microsoft PCM Format (WAV)";
-            
-            if (headerData.size() > 1024) {
-                report.chunk_padding_anomaly = true;
-                report.disruption_score = 0.55f;
-                report.encoder_signature += " [Non-Standard Trailing Data Structure Variant Detected]";
-            }
-        } else if (headerData[4] == 'f' && headerData[5] == 't' && headerData[6] == 'y' && headerData[7] == 'p') {
-            report.type = ContainerType::AAC;
-            report.has_valid_headers = true;
-            report.encoder_signature = "ISO/IEC MPEG-4 Container Structure";
-        }
-        return report;
-    }
-};
-
 
 // ============================================================================
 // 7. VST3 INTEGRATION COMPONENT IMPLEMENTATION
