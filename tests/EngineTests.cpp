@@ -1,6 +1,7 @@
 // Minimal, dependency-free test harness (no gtest dependency needed for a
 // project this size — keeps the hardened build's dependency surface small).
 #include "core/MSV_Engine.h"
+#include "core/EvidenceFusionEngine.h"
 #include "core/SecurityHardening.h"
 #include "core/CodecScanner.h"
 #include <cstdio>
@@ -8,6 +9,7 @@
 #include <cstdlib>
 #include <new>
 #include <cmath>
+#include <limits>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -60,6 +62,21 @@ void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); 
 int main()
 {
     using namespace dawchecker;
+
+    // --- VST3 evidence fusion must be monotonic and bounded.
+    {
+        dsp::EvidenceFusionEngine fusion;
+        const float clean = fusion.calculateTamperScore(0.99f, 0.01f, 0.5f);
+        const float anomalous = fusion.calculateTamperScore(0.20f, 1.50f, 0.8f);
+        check(anomalous > clean,
+              "Stronger anomaly features increase the VST3 heuristic score");
+        check(clean >= 0.0f && anomalous <= 1.0f,
+              "VST3 heuristic score remains in the 0..1 range");
+        const float invalid = fusion.calculateTamperScore(
+            std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.5f);
+        check(invalid == 0.0f,
+              "Non-finite feature input cannot propagate NaN into the VST3 score");
+    }
 
     // --- Engine sanity: silence in should stay near-silent out, score low.
     {
