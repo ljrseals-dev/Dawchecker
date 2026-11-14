@@ -148,6 +148,17 @@ Environmental hum footprints can support (not alone prove) temporal/geographic c
 
 Controlled by atomics on `MSV_Engine`; applied inside `process()` when not bypassed.
 
+### 3.6.1 SharedFeaturePipeline and real-time evidence queue
+
+**Files:** `src/core/SharedFeaturePipeline.h/.cpp`, `src/core/RealtimeEvidenceQueue.h`
+
+- Fixed-storage 512-sample analysis frame, 128-sample hop, and 16,384-sample input ring.
+- Ring overflow uses a bounded drop-oldest policy; processing does not allocate or lock.
+- The 16-frame phase-coherence history and FFT working buffers are preallocated.
+- The spectral split is relative to half the Nyquist range, not a fixed-Hz cutoff.
+- `audio_pipeline_tests` checks 44.1/48/96 kHz configuration, frame availability, ring wrap/overflow, finite output, and zero heap allocations using a test-only global `operator new` counter.
+- `RealtimeEvidenceQueue` is a bounded SPSC queue. The audio thread only enqueues fixed-size events; the non-audio worker performs evidence-graph string/map updates. Full queues drop the newest event rather than block the producer.
+
 ### 3.7 CodecScanner & AudioDeviceManager
 
 **Namespaces:** `dawchecker::codec`, `dawchecker::audio`
@@ -211,17 +222,19 @@ Score labels: Clean ≤20 · Low-Level Artifacts ≤50 · Attention Recommended 
 
 Single-component Steinberg VST3 effect (`SingleComponentEffect`):
 
-- Shared STFT-style feature pipeline (isolated DFT loop in reference implementation)
+- Shared fixed-storage feature pipeline (512-sample frame, 128-sample hop, bounded 16,384-sample ring)
+- Preallocated DFT working buffers; no heap allocation in the pipeline write/process methods
 - Platt-scaled fusion for tamper certainty
-- Bayesian-style evidence graph structures
+- Bounded SPSC event queue; evidence-graph allocations are moved to a non-audio worker
+- Mono pass-through, stereo processing, and safe fallback for mismatched or null channel buffers
+- Persistent bounded 80 Hz phase accumulator; phase advances independently of tone audibility
 - SHA-256 digest through the shared OpenSSL EVP implementation (`dawchecker_crypto`)
 - No digital-signature generation or signer-identity claim; a digest alone does not prove provenance
 - Parameters: sensitivity, fusion threshold, anti-forensic gate
-- Optional sub-harmonic (~80 Hz) tracking tone on alert for downstream recorders
 
 **Factory:** distributable analyzer-class registration; UID defined in translation unit.
 
-Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path). The current CMake project does not define a VST3 consumer target. Before release, the SDK-backed VST3 target must include `src/` and link `dawchecker_crypto` / `OpenSSL::Crypto`; until that target is added and built in CI, VST3 crypto integration remains a manual release blocker.
+**Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_crypto` / `OpenSSL::Crypto`, and pass an SDK-backed build before VST3 integration is release-verified.
 
 ---
 
