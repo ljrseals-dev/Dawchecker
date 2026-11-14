@@ -136,7 +136,8 @@ async function flush() {
   assert.equal(unblock.method, 'POST');
   assert.match(unblock.headers['Content-Type'], /application\/json/i);
   assert.deepEqual(JSON.parse(unblock.body), { ip: '203.0.113.10' });
-  assert.equal(getElementById('banList').innerHTML, '', 'ban list refreshes after unblock');
+  assert.match(getElementById('banList').innerHTML, /No CSF deny entries returned/,
+    'ban list refreshes to an explicit empty state after unblock');
   assert.match(getElementById('wlList').innerHTML, /203\.0\.113\.10/, 'whitelist refreshes after unblock');
 
   bans = [{
