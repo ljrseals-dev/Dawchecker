@@ -168,6 +168,7 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
 
     def test_bans_payload_contains_only_reported_metadata(self):
         with patch.object(api, "require_csf"), \
+             patch.object(api.os.path, "isfile", return_value=True), \
              patch.object(api, "read_csf_file", return_value=["203.0.113.7"]):
             bans = api.get_bans()
         self.assertEqual(bans, [{
