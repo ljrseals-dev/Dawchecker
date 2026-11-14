@@ -31,6 +31,17 @@ SCRIPTS_DIR = ROOT / "scripts"
 LOG_PATH = Path(os.environ.get("SPP_LOG", "/var/log/server-protection/api.log"))
 
 REQUIRE_ROOT_FOR_MUTATIONS = os.environ.get("SPP_REQUIRE_ROOT", "1") != "0"
+# Exact browser origins are configured independently of the untrusted Host header.
+# The defaults cover loopback access; deployments on another hostname must set
+# SPP_ALLOWED_ORIGINS to a comma-separated list of complete origins.
+ALLOWED_ORIGINS = frozenset(
+    origin.strip().rstrip("/")
+    for origin in os.environ.get(
+        "SPP_ALLOWED_ORIGINS",
+        f"http://127.0.0.1:{PORT},http://localhost:{PORT},http://[::1]:{PORT}",
+    ).split(",")
+    if origin.strip()
+)
 
 _LOG: list[dict[str, str]] = []
 _LOG_LOCK = threading.Lock()
@@ -351,11 +362,23 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
+
+    def _origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin")
+        return bool(origin and origin != "null" and origin.rstrip("/") in ALLOWED_ORIGINS)
+
+    def _require_mutation_request(self) -> bool:
+        # JSON content type blocks ordinary cross-site HTML form submissions.
+        # Origin is checked against explicit configuration, never against Host.
+        if self.headers.get_content_type() != "application/json":
+            self._json(415, {"ok": False, "error": "Content-Type must be application/json"})
+            return False
+        if not self._origin_allowed():
+            self._json(403, {"ok": False, "error": "origin not allowed"})
+            return False
+        return True
 
     def _read_json(self) -> dict[str, Any]:
         n = int(self.headers.get("Content-Length") or 0)
@@ -368,11 +391,8 @@ class Handler(SimpleHTTPRequestHandler):
             return {}
 
     def do_OPTIONS(self) -> None:  # noqa: N802
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+        # No CORS preflight is authorized; the dashboard is same-origin.
+        self.send_error(405, "Cross-origin requests are not supported")
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
@@ -411,6 +431,8 @@ class Handler(SimpleHTTPRequestHandler):
         return SimpleHTTPRequestHandler.do_GET(self)
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._require_mutation_request():
+            return
         path = urlparse(self.path).path
         data = self._read_json()
         try:
@@ -419,10 +441,26 @@ class Handler(SimpleHTTPRequestHandler):
                 if not ip:
                     self._json(400, {"ok": False, "error": "ip required"})
                     return
-                ok, msg = csf_deny_remove(ip)
-                if ok:
-                    csf_allow(ip)
-                self._json(200 if ok else 500, {"ok": ok, "msg": msg, "ip": ip})
+                removed, remove_msg = csf_deny_remove(ip)
+                if not removed:
+                    self._json(500, {
+                        "ok": False, "stage": "deny_remove", "partial": False,
+                        "error": remove_msg, "ip": ip,
+                    })
+                    return
+                allowed, allow_msg = csf_allow(ip)
+                if not allowed:
+                    self._json(500, {
+                        "ok": False, "stage": "allow_add", "partial": True,
+                        "error": allow_msg,
+                        "detail": "Temporary deny removal succeeded but allow-list addition failed; the IP may be reachable and may be banned again by LFD.",
+                        "ip": ip,
+                    })
+                    return
+                self._json(200, {
+                    "ok": True, "stage": "complete", "partial": False,
+                    "msg": f"{remove_msg}; {allow_msg}", "ip": ip,
+                })
                 return
 
             if path in ("/api/whitelist", "/whitelist"):
@@ -464,6 +502,8 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(500, {"ok": False, "error": str(e)})
 
     def do_DELETE(self) -> None:  # noqa: N802
+        if not self._require_mutation_request():
+            return
         path = urlparse(self.path).path
         data = self._read_json()
         try:
