@@ -60,7 +60,7 @@ ALLOWED_ORIGINS = frozenset(
     origin.strip().rstrip("/")
     for origin in os.environ.get(
         "SPP_ALLOWED_ORIGINS",
-        f"http://127.0.0.1:{PORT},http://localhost:{PORT}",
+        f"http://{HOST}:{PORT},http://localhost:{PORT}",
     ).split(",")
     if origin.strip()
 )
