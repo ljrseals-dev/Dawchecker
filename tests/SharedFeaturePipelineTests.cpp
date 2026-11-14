@@ -80,6 +80,11 @@ int main() {
           std::isfinite(result.high_freq_anomaly) &&
           std::isfinite(result.noise_floor),
           "frame analysis returns finite metrics");
+    check(dawchecker::dsp::calculateHighFrequencyAnomaly(1.0f, 0.0f) == 1.0e6f,
+          "high-band energy with zero low-band energy is not silently scored as zero");
+    check(dawchecker::dsp::calculateHighFrequencyAnomaly(0.0f, 0.0f) == 0.0f &&
+          dawchecker::dsp::calculateHighFrequencyAnomaly(1.0f, 1.0f) == 1.0f,
+          "high-frequency ratio handles silence and balanced spectra");
     check(pipeline48000.bufferedSamples() ==
               SharedFeaturePipeline::kFftSize - SharedFeaturePipeline::kHopSize,
           "overlap processing consumes exactly one hop");
@@ -146,6 +151,17 @@ int main() {
           std::isfinite(invalidInputResult.high_freq_anomaly) &&
           std::isfinite(invalidInputResult.noise_floor),
           "NaN and infinity input samples are sanitized before FFT analysis");
+
+    SharedFeaturePipeline extremeInputPipeline(48000.0);
+    std::array<float, SharedFeaturePipeline::kFftSize> extremeInput{};
+    extremeInput.fill(1.0e30f);
+    extremeInputPipeline.writeSamples(extremeInput.data(), extremeInput.size());
+    const auto extremeResult =
+        extremeInputPipeline.processNextFrame(0.5f, 0.25f);
+    check(std::isfinite(extremeResult.phase_coherence) &&
+          std::isfinite(extremeResult.high_freq_anomaly) &&
+          std::isfinite(extremeResult.noise_floor),
+          "very large finite input is bounded before FFT arithmetic");
 
     dawchecker::dsp::RealtimeEvidenceQueue queue;
     dawchecker::dsp::RealtimeEvidenceEvent event{};
