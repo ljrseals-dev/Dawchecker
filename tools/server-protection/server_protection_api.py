@@ -169,11 +169,23 @@ def ipset_entry_counts() -> dict[str, int]:
     return counts
 
 
+def count_csf_file_entries(path: str) -> int:
+    # Stream the file so the dashboard count is not capped by the ban-list
+    # pagination limit and does not allocate a second in-memory copy.
+    count = 0
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            entry = line.strip()
+            if entry and not entry.startswith("#"):
+                count += 1
+    return count
+
+
 def blocked_total() -> int:
     # Count the authoritative CSF deny file. Summing independent ipset sets
     # can double-count entries and is not a unique blocked-IP total.
     try:
-        return len(read_csf_file("/etc/csf/csf.deny", 100_000))
+        return count_csf_file_entries("/etc/csf/csf.deny")
     except OSError:
         return 0
 
