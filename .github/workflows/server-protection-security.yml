@@ -6,6 +6,7 @@ on:
       - "repair/**"
     paths:
       - "tools/server-protection/server_protection_api.py"
+      - "tools/server-protection/README.md"
       - "tools/server-protection/spp-discover.sh"
       - "tests/test_server_protection_api.py"
       - "tests/test_spp_discover.sh"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - "tools/server-protection/server_protection_api.py"
+      - "tools/server-protection/README.md"
       - "tools/server-protection/spp-discover.sh"
       - "tests/test_server_protection_api.py"
       - "tests/test_spp_discover.sh"
