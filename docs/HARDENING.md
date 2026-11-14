@@ -16,41 +16,50 @@ application's control: the binary itself, and its own runtime behavior.
 
 ## Build-time (compiler/linker) hardening
 
-Configured centrally in `CMakeLists.txt`'s `hardening_flags` target and
-applied to every target in the project:
+CMake applies compiler and linker options directly; there is no separate
+`hardening_flags` target.
 
-| Mitigation | GCC/Clang flag | MSVC flag | What it stops |
-|---|---|---|---|
-| Stack smashing detection | `-fstack-protector-strong` | `/GS` | Classic stack buffer overflows |
-| Stack clash protection | `-fstack-clash-protection` | — | Stack/heap collision attacks |
-| Fortified libc calls | `-D_FORTIFY_SOURCE=2` | `/sdl` | Buffer-overrun in `memcpy`/`sprintf`-family calls |
-| Position-independent exec | `-fPIE -pie` | `/DYNAMICBASE` | Makes ASLR effective for the main binary |
-| Full RELRO | `-Wl,-z,relro -Wl,-z,now` | — | GOT-overwrite exploitation |
-| Non-executable stack | `-Wl,-z,noexecstack` | `/NXCOMPAT` | Stack-based shellcode execution |
-| Control-flow integrity | `-fcf-protection=full` (Intel CET) | `/guard:cf`, `/CETCOMPAT` | ROP/JOP-style control-flow hijacking |
-| High-entropy ASLR | (default on 64-bit) | `/HIGHENTROPYVA` | Address-guessing attacks |
-| Format-string safety | `-Wformat -Werror=format-security` | `/W4` | `printf`-family format-string bugs |
-| Spectre v1 mitigation | — | `/Qspectre` | Speculative-execution side channels |
+For GCC/Clang, the current configuration enables:
 
-Optional (`-DDAWCHECKER_ENABLE_SANITIZERS=ON`, debug/test builds only):
-AddressSanitizer + UndefinedBehaviorSanitizer for development-time bug
-catching. Never enable this for a release build you distribute — it changes
-memory layout and adds overhead.
+- Warnings for common correctness issues, including conversion, shadowing,
+  return-type, uninitialized-value, and format-security diagnostics.
+- `-fstack-protector-strong`.
+- `-fstack-clash-protection` and `-fcf-protection=full` when the compiler
+  accepts those options.
+- `-D_FORTIFY_SOURCE=2` outside Debug builds.
+- On non-Apple Unix Release executables: `-fPIE`, `-pie`,
+  `-Wl,-z,relro,-z,now`, and `-Wl,-z,noexecstack`.
+
+For MSVC, CMake enables `/W4`, `/WX`, `/GS`, `/sdl`,
+`/permissive-`, and `/Zc:__cplusplus`; executable link options include
+`/DYNAMICBASE`, `/NXCOMPAT`, `/HIGHENTROPYVA`, and `/GUARD:CF`.
+
+Development-only AddressSanitizer and UndefinedBehaviorSanitizer
+instrumentation is available with
+`-DDAWCHECKER_ENABLE_SANITIZERS=ON` on GCC/Clang. The
+`scripts/build_debug_sanitizers.sh` helper enables this option. Do not
+distribute sanitizer-instrumented builds as release binaries.
+
+These settings reduce exposure to selected classes of implementation errors;
+they do not prove that the application or resulting binary is secure. The
+hardened build script's PIE/RELRO/NX checks are best-effort reports and do not
+currently fail the build when a property is missing.
 
 ## Application-level hardening (runtime)
 
 Implemented in `src/core/SecurityHardening.{h,cpp}`:
 
-- **Checked arithmetic** (`checkedMul`, `checkedAdd`) for every buffer-size
-  calculation in the DSP path, so a crafted or unusual sample-rate/block-size
-  combination can't silently overflow a `size_t` the way it has in real
-  audio-plugin CVEs.
-- **Secure memory zeroing** (`secureZero`, `ScopedSecureBuffer`) for any
-  buffer that briefly holds audio pulled from a file/device the user is
-  specifically trying to scrub identifying watermark data from — zeroed in a
-  way the optimizer can't elide.
-- **Path validation** (`isSafeExportPath`) before writing any "neutralized"
-  export next to a user-selected file, rejecting traversal sequences.
+- **Checked arithmetic helpers** (`checkedMul`, `checkedAdd`) are
+  implemented for callers that need overflow-safe size calculations. They are
+  not currently wired into every allocation or buffer-size path, so no
+  project-wide overflow-proof claim is made.
+- **Secure memory zeroing utilities** (`secureZero`,
+  `ScopedSecureBuffer`) are implemented. `ScopedSecureBuffer` wipes its own
+  owned storage on destruction; this does not mean every audio, device, or
+  analysis buffer in the application is automatically erased.
+- **Path validation helper** (`isSafeExportPath`) rejects traversal-style
+  paths. It is a utility for callers; this document does not claim a complete
+  file-export workflow is currently wired to it.
 - **Read-only startup self-check** (`runStartupSelfCheck`) that reports — but
   never acts on — whether ASLR looks active at the OS level, whether a
   debugger is attached, and whether the process is running elevated. This is
@@ -58,9 +67,12 @@ Implemented in `src/core/SecurityHardening.{h,cpp}`:
   never disables features, exits, or otherwise changes behavior based on
   these signals — a security tool that got twitchy around debuggers would be
   actively hostile to the security researchers who are its natural allies.
-- **Build integrity manifest**: the build produces a sibling `.sha256` file
-  next to the compiled binary so you (or anyone auditing a distributed copy)
-  can verify it hasn't been altered after compilation.
+- **Build integrity sidecar**: `scripts/build_hardened.sh` removes stale
+  sidecars before dependency vendoring/configuration, requires at least one
+  registered CTest test, runs the test suite, and writes a sibling `.sha256`
+  file atomically only after build and tests succeed. A direct CMake build does
+  not generate this sidecar. A checksum verifies bytes against a trusted
+  reference; it is not a digital signature or chain-of-custody record.
 
 ## What this project deliberately does *not* do
 
