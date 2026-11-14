@@ -78,6 +78,9 @@ Implemented in `src/core/SecurityHardening.{h,cpp}`:
 
 - No kernel-mode drivers, no firmware writes, no Secure Boot key management.
 - No anti-debugging *evasion* (only informational detection).
-- No telemetry, no network calls of any kind at runtime — the only URL in the
-  whole GUI is a plain "Get Latest Release" link the user has to click.
+- No telemetry or network calls from the desktop audio application or
+  VST3 plugin component — the only URL in the GUI is a plain "Get Latest
+  Release" link the user has to click. This does not cover the separate
+  `tools/server-protection` toolkit, whose installer and operator-triggered
+  blocklist updater use the network.
 - No license-server / phone-home checks.
