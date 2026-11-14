@@ -315,6 +315,10 @@ snapshot_probe() {
         return 0
     fi
     if "$@" >"$file" 2>/dev/null; then
+        if [ ! -s "$file" ]; then
+            SNAP_FAIL+=("$name:empty-output")
+            return 0
+        fi
         SNAP_OK+=("$name")
         if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "$file" >>"$SNAP_DIR/SHA256" 2>/dev/null || SNAP_FAIL+=("$name:hash-failed")
@@ -327,9 +331,15 @@ snapshot_probe() {
 
 SNAP_DIR=""
 if [ -n "${SPP_SNAPSHOT_DIR:-}" ]; then
+    # Firewall snapshots can expose network topology and policy; create them
+    # with owner-only permissions and never overwrite an existing timestamp.
+    umask 077
     stamp="$(date -u +%Y%m%dT%H%M%SZ 2>/dev/null || printf unknown)"
     SNAP_DIR="${SPP_SNAPSHOT_DIR%/}/$stamp"
-    if mkdir -p "$SNAP_DIR" 2>/dev/null; then
+    if [ -e "$SNAP_DIR" ] || [ -L "$SNAP_DIR" ]; then
+        SNAP_FAIL+=("snapshot-directory:already-exists")
+        record SNAPSHOT_DIR unavailable
+    elif mkdir -p "$SNAP_DIR" 2>/dev/null; then
         : >"$SNAP_DIR/SHA256"
         snapshot_probe nft_ruleset "$SNAP_DIR/nft_ruleset" nft list ruleset
         snapshot_probe iptables_save "$SNAP_DIR/iptables_save" iptables-save
