@@ -200,10 +200,7 @@ def get_bans() -> list[dict[str, Any]]:
         bans.append(
             {
                 "ip": ip,
-                "cc": "",
-                "org": "csf.deny",
-                "set": "CSF_DENY",
-                "hits": 0,
+                "source": "csf.deny",
                 "active": True,
             }
         )
