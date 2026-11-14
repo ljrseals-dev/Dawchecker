@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALLER="$ROOT/tools/server-protection/install.sh"
@@ -22,6 +22,11 @@ cat > "$TMP/empty/cat" <<'SH'
 exec /usr/bin/cat "$@"
 SH
 chmod +x "$TMP/empty/cat"
+cat > "$TMP/empty/date" <<'SH'
+#!/bin/sh
+exec /usr/bin/date "$@"
+SH
+chmod +x "$TMP/empty/date"
 
 # Missing cron and systemd tools must be a warning-only, successful path.
 missing_output="$(
