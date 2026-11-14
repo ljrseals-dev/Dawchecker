@@ -144,14 +144,14 @@ eq "fail2ban jail list" "$(printf '%s\n' "$out" | awk -F= '$1=="FAIL2BAN_JAILS"{
 before="$(find "$T" -type f | sort)"
 env -i PATH="$BIN" HOME="$T" SPP_CASE=fw-confirmed \
   SPP_OS_RELEASE_FILE="$T/os-release" SPP_SYSTEMD_RUNTIME_DIR="$T/systemd" \
-  /bin/bash "$SCRIPT" >/dev/null 2>"$T/default-stderr" || rc=$?
+  /bin/bash "$SCRIPT" >/dev/null 2>/dev/null || rc=$?
 after="$(find "$T" -type f | sort)"
 eq "default mode creates no persistent output" "$after" "$before"
 
 # Opt-in snapshot mode stores actual command output, a RESULT, and hashes.
 env -i PATH="$BIN" HOME="$T" SPP_CASE=fw-confirmed \
   SPP_OS_RELEASE_FILE="$T/os-release" SPP_SYSTEMD_RUNTIME_DIR="$T/systemd" \
-  SPP_SNAPSHOT_DIR="$T/snapshots" /bin/bash "$SCRIPT" >/dev/null 2>"$T/snapshot-stderr" || true
+  SPP_SNAPSHOT_DIR="$T/snapshots" /bin/bash "$SCRIPT" >/dev/null 2>/dev/null || true
 SNAP="$T/snapshots/20261114T120000Z"
 [ -s "$SNAP/nft_ruleset" ] && ok "snapshot captures nft command output" || bad "snapshot captures nft command output" missing present
 [ -s "$SNAP/ufw_status" ] && ok "snapshot captures UFW status output" || bad "snapshot captures UFW status output" missing present
