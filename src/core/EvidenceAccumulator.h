@@ -1,7 +1,7 @@
 #pragma once
 
+#include <map>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace dawchecker::dsp {
@@ -41,8 +41,8 @@ private:
         float weight;
     };
 
-    std::unordered_map<std::string, EvidenceRecord> records_;
-    std::unordered_map<std::string, std::vector<EvidenceLink>> links_;
+    std::map<std::string, EvidenceRecord> records_;
+    std::map<std::string, std::vector<EvidenceLink>> links_;
 };
 
 } // namespace dawchecker::dsp
