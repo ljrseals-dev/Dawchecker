@@ -11,6 +11,7 @@ Run as root for deny/allow mutations.
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
 import re
 import shutil
@@ -23,8 +24,28 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-HOST = os.environ.get("SPP_HOST", "127.0.0.1")
-PORT = int(os.environ.get("SPP_PORT", "8080"))
+def _validate_bind_host(value: str) -> str:
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError as exc:
+        raise ValueError("SPP_HOST must be an IPv4 loopback address; remote binding is unsupported") from exc
+    if address.version != 4 or not address.is_loopback:
+        raise ValueError("SPP_HOST must be an IPv4 loopback address; remote binding is unsupported")
+    return str(address)
+
+
+def _validate_port(value: str) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("SPP_PORT must be an integer from 1 to 65535") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("SPP_PORT must be an integer from 1 to 65535")
+    return port
+
+
+HOST = _validate_bind_host(os.environ.get("SPP_HOST", "127.0.0.1"))
+PORT = _validate_port(os.environ.get("SPP_PORT", "8080"))
 MAX_JSON_BODY_BYTES = 16 * 1024
 ROOT = Path(__file__).resolve().parent
 DASHBOARD_DIR = ROOT / "dashboard"
