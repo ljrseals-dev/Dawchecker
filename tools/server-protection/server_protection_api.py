@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 HOST = os.environ.get("SPP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SPP_PORT", "8080"))
+MAX_JSON_BODY_BYTES = 16 * 1024
 ROOT = Path(__file__).resolve().parent
 DASHBOARD_DIR = ROOT / "dashboard"
 SCRIPTS_DIR = ROOT / "scripts"
@@ -188,6 +189,14 @@ def get_whitelist() -> list[dict[str, str]]:
     return out
 
 
+def _job_status_snapshot() -> dict[str, dict[str, Any]]:
+    with _JOBS_LOCK:
+        return {
+            key: {"state": value.get("state"), "detail": value.get("detail"), "rc": value.get("rc")}
+            for key, value in _JOBS.items()
+        }
+
+
 def status_payload() -> dict[str, Any]:
     require_csf()
     counts = ipset_entry_counts()
@@ -218,10 +227,7 @@ def status_payload() -> dict[str, Any]:
         "ipset_sets": counts,
         "bitwire_estimate": bitwire,
         "ipsum_estimate": ipsum,
-        "jobs": {
-            k: {"state": v.get("state"), "detail": v.get("detail"), "rc": v.get("rc")}
-            for k, v in _JOBS.items()
-        },
+        "jobs": _job_status_snapshot(),
     }
 
 
@@ -370,25 +376,49 @@ class Handler(SimpleHTTPRequestHandler):
         return bool(origin and origin != "null" and origin.rstrip("/") in ALLOWED_ORIGINS)
 
     def _require_mutation_request(self) -> bool:
-        # JSON content type blocks ordinary cross-site HTML form submissions.
-        # Origin is checked against explicit configuration, never against Host.
+        # Require both the exact configured Origin and its corresponding Host.
+        # Host is checked against configured origins; it never expands them.
         if self.headers.get_content_type() != "application/json":
             self._json(415, {"ok": False, "error": "Content-Type must be application/json"})
+            return False
+        allowed_hosts = {
+            urlparse(origin).netloc.lower()
+            for origin in ALLOWED_ORIGINS
+            if urlparse(origin).scheme in ("http", "https") and urlparse(origin).netloc
+        }
+        request_host = (self.headers.get("Host") or "").strip().lower()
+        if not request_host or request_host not in allowed_hosts:
+            self._json(403, {"ok": False, "error": "host not allowed"})
             return False
         if not self._origin_allowed():
             self._json(403, {"ok": False, "error": "origin not allowed"})
             return False
         return True
 
-    def _read_json(self) -> dict[str, Any]:
-        n = int(self.headers.get("Content-Length") or 0)
-        if n <= 0:
+    def _read_json(self) -> dict[str, Any] | None:
+        raw_length = self.headers.get("Content-Length")
+        try:
+            n = int(raw_length or "0")
+        except ValueError:
+            self._json(400, {"ok": False, "error": "invalid Content-Length"})
+            return None
+        if n < 0:
+            self._json(400, {"ok": False, "error": "invalid Content-Length"})
+            return None
+        if n > MAX_JSON_BODY_BYTES:
+            self._json(413, {"ok": False, "error": "request body too large"})
+            return None
+        if n == 0:
             return {}
         try:
             data = json.loads(self.rfile.read(n).decode("utf-8"))
-            return data if isinstance(data, dict) else {}
-        except json.JSONDecodeError:
-            return {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._json(400, {"ok": False, "error": "invalid JSON body"})
+            return None
+        if not isinstance(data, dict):
+            self._json(400, {"ok": False, "error": "JSON body must be an object"})
+            return None
+        return data
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         # No CORS preflight is authorized; the dashboard is same-origin.
@@ -435,6 +465,8 @@ class Handler(SimpleHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         data = self._read_json()
+        if data is None:
+            return
         try:
             if path in ("/api/unblock", "/unblock"):
                 ip = str(data.get("ip", "")).strip()
@@ -506,6 +538,8 @@ class Handler(SimpleHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         data = self._read_json()
+        if data is None:
+            return
         try:
             if path in ("/api/whitelist", "/whitelist"):
                 entry = str(data.get("entry", "")).strip()
