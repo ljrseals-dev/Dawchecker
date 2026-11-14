@@ -3,7 +3,12 @@ name: Dashboard acceptance
 on:
   push:
     branches:
-      - "repair/p1-dashboard-truthfulness"
+      - "repair/**"
+    paths:
+      - "tools/server-protection/dashboard/index.html"
+      - "tests/test_dashboard_api.js"
+      - "tests/test_dashboard_browser.js"
+      - ".github/workflows/dashboard-acceptance.yml"
   pull_request:
     paths:
       - "tools/server-protection/dashboard/index.html"
