@@ -224,7 +224,7 @@ Standalone audio score labels: Clean ≤20 · Low-Level Artifacts ≤50 · Atten
 The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 
 - Shared fixed-storage feature pipeline (512-sample frame, 128-sample hop, bounded 16,384-sample ring)
-- Preallocated DFT working buffers; no heap allocation in the pipeline write/process methods
+- Preallocated radix-2 FFT workspace; no heap allocation in the pipeline write/process methods
 - Logistic mapping to a bounded heuristic score; not a calibrated probability or posterior
 - Bounded SPSC event queue; evidence-graph allocations are moved to a non-audio worker
 - Mono pass-through, stereo processing, and safe fallback for mismatched or null channel buffers
