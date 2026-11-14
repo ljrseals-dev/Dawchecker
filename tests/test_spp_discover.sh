@@ -71,7 +71,14 @@ case "$cmd" in
     esac
     exit 0 ;;
   ufw)
-    case "$1" in status) echo "Status: active" ;; esac
+    case "$1" in
+      status)
+        case "$SPP_CASE" in
+          ufw-confirmed|ufw-no-unit|manager-conflict) echo "Status: active" ;;
+          *) echo "Status: inactive" ;;
+        esac
+        ;;
+    esac
     exit 0 ;;
   fail2ban-client)
     case "$1" in
