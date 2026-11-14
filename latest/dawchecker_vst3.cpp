@@ -346,15 +346,16 @@ private:
 // 8. WIN/LINUX/MAC EXPORT REGISTRATION FACTORY MACROS
 // ============================================================================
 
-BEGIN_FACTORY_DEF("TheRealla Audio Forensic Labs", 
-                  "https://github.com/TheRealla", 
-                  "mailto:support@therealla.internal")
+BEGIN_FACTORY("TheRealla Audio Forensic Labs",
+              "https://github.com/TheRealla",
+              "mailto:support@therealla.internal",
+              PFactoryInfo::kNoFlags)
 
     DEF_CLASS2(INLINE_UID_FROM_FUID(DawCheckerSecureUltimate::kDawCheckerPluginUID),
                PClassInfo::kManyInstances,
                kVstAudioEffectClass,
                "DawChecker Audio Forensics",
-               Vst::kDistributable,          // classFlags (int) -- "kDistortion" was a fabricated constant here
+               Vst::kDistributable,
                Vst::PlugType::kFxAnalyzer,   // subCategories (string) -- "Fx|Analyzer"
                "3.0.0",
                kVstVersionString,
