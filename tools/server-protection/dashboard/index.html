@@ -352,7 +352,7 @@ body{
 </div>
 
 <script>
-let totalBlocked=0,selIP='',selRow=-1,panicked=false,wlSelRow=-1;
+let totalBlocked=null,selIP='',selRow=-1,panicked=false,wlSelRow=-1;
 let scanRunning=false,rkhRunning=false;
 
 const BANS = [];
@@ -368,6 +368,16 @@ function ts(){return new Date().toLocaleTimeString('en',{hour12:false,hour:'2-di
 function addLog(msg){LOG.unshift('['+ts()+'] '+msg);if(LOG.length>120)LOG.pop();renderLog();}
 
 function renderBans(){
+  const list = document.getElementById('banList');
+  if (!BANS.length) {
+    const emptyText = !apiLoaded ? 'Awaiting CSF API data'
+      : (apiLive ? 'No CSF deny entries returned' : 'CSF API unavailable; ban state unknown');
+    list.innerHTML = '<div class="empty">'+escapeHtml(emptyText)+'</div>';
+    document.getElementById('banCount').textContent =
+      apiLive ? '0 returned entries' : 'count unavailable';
+    updateDenyCount();
+    return;
+  }
   let h=BANS.map((e,i)=>{
     let sel=selRow===i;
     let bc=e.active?'b-bl':'b-ub';
@@ -380,15 +390,27 @@ function renderBans(){
       <span class="unbl-ico" onclick="event.stopPropagation();quickUnblock(${i})" title="unblock">${ic}</span>
     </div>`;
   }).join('');
-  document.getElementById('banList').innerHTML=h;
+  list.innerHTML=h;
+  document.getElementById('banCount').textContent = BANS.length + ' returned entries';
+  updateDenyCount();
 }
 
 function renderWL(){
+  const list = document.getElementById('wlList');
+  if (!WL.length) {
+    const emptyText = !apiLoaded ? 'Awaiting CSF API data'
+      : (apiLive ? 'No CSF allow entries returned' : 'CSF API unavailable; whitelist state unknown');
+    list.innerHTML = '<div class="empty">'+escapeHtml(emptyText)+'</div>';
+    document.getElementById('wlCount').textContent =
+      apiLive ? '0 returned entries' : 'count unavailable';
+    return;
+  }
   let h=WL.map((w,i)=>`<div class="row wl-row-g${wlSelRow===i?' sel':''}" onclick="wlSelRow=${i};renderWL()">
     <span class="ip ok">${escapeHtml(w.entry)}</span>
     <span style="font-size:7px;color:#1a3a1a">${escapeHtml(w.type)}</span>
   </div>`).join('');
-  document.getElementById('wlList').innerHTML=h;
+  list.innerHTML=h;
+  document.getElementById('wlCount').textContent = WL.length + ' returned entries';
 }
 
 function renderLog(){
@@ -418,9 +440,15 @@ function selectBan(i){
 function quickUnblock(i){selRow=i;selectBan(i);doUnblock();}
 
 function updateDenyCount(){
-  const count = Number.isFinite(totalBlocked) ? totalBlocked : BANS.length;
-  document.getElementById('denyCount').textContent =
-    count.toLocaleString() + ' entries in csf.deny (API count)';
+  const node = document.getElementById('denyCount');
+  if (!Number.isFinite(totalBlocked)) {
+    node.textContent = apiLive ? 'CSF deny count unavailable'
+      : (apiLoaded ? 'CSF deny count unavailable (API offline)' : 'Awaiting CSF API count');
+    return;
+  }
+  const freshness = apiLive ? 'API count' : 'last API count; API offline';
+  node.textContent = totalBlocked.toLocaleString() +
+    ' entries in csf.deny (' + freshness + ')';
 }
 
 function renderJobCard(job, statusId, finishedId, exitId) {
@@ -474,6 +502,7 @@ addLog('Dashboard loaded; awaiting server API data.');
 // Production API client — real CSF data only, no demo callbacks
 const API_BASE = (location.protocol === 'file:' ? 'http://127.0.0.1:8080' : '') + '/api';
 let apiLive = false;
+let apiLoaded = false;
 
 async function api(path, opts = {}) {
   const init = {
