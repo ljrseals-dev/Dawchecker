@@ -44,7 +44,7 @@ private:
     std::array<float, kInputCapacity> input_buffer_{};
     std::array<float, kFftSize> fft_window_{};
     std::array<float, kFftSize> frame_buffer_{};
-    std::array<std::complex<float>, kBinCount> spectrum_buffer_{};
+    std::array<std::complex<float>, kFftSize> spectrum_buffer_{};
     std::array<float, kBinCount> previous_phases_{};
     std::array<float, 16> history_coherence_{};
     std::size_t history_index_ = 0;
