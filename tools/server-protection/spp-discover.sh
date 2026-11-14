@@ -51,8 +51,8 @@ if [ -r "$OS_RELEASE_FILE" ]; then
     for key in OS_ID OS_LIKE OS_VERSION OS_PRETTY; do
         value="${!key}"
         case "$value" in
-            \"*\") value="${value#\\\"}"; value="${value%\\\"}" ;;
-            \'*\') value="${value#\\'}"; value="${value%\\'}" ;;
+            \"*\") value=${value#\\\"}; value=${value%\\\"} ;;
+            \'*\') value=${value#\\'}; value=${value%\\'} ;;
         esac
         printf -v "$key" '%s' "$value"
     done
