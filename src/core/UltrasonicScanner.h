@@ -21,6 +21,7 @@ private:
     double sampleRate_ = 48000.0;
     std::array<GoertzelBin, 5> bins_{}; // 17.4k, 18k, 18.5k, 19.2k, 20.15k
     double smoothed_ = 0.0;
+    std::size_t activeBinCount_ = 0;
 };
 
 } // namespace dawchecker::dsp
