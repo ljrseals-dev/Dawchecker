@@ -1,7 +1,6 @@
 #include "WatermarkDetector.h"
 #include <cmath>
 #include <algorithm>
-#include <numeric>
 
 namespace dawchecker::dsp {
 
@@ -12,8 +11,8 @@ WatermarkDetector::WatermarkDetector(double sampleRate, double sensitivity)
 
 void WatermarkDetector::prepare(double sampleRate, double sensitivity)
 {
-    sampleRate_  = sampleRate > 0.0 ? sampleRate : 48000.0;
-    sensitivity_ = std::clamp(sensitivity, 1.0, 100.0);
+    sampleRate_  = std::isfinite(sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
+    sensitivity_ = std::isfinite(sensitivity) ? std::clamp(sensitivity, 1.0, 100.0) : 5.0;
     prevRef_ = prevLive_ = prevDelta_ = 0.0;
     smoothedStego_ = 0.0;
     deltaHistory_.fill(0.0);
