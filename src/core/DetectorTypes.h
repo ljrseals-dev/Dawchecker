@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <string>
 
 namespace dawchecker::dsp {
 
@@ -11,7 +10,7 @@ struct DetectorResult
     DetectorStatus status   = DetectorStatus::Idle;
     double         confidence = 0.0; // 0..100
     double         locationHz = 0.0; // dominant frequency/region of the finding, if applicable
-    std::string    label;            // human-readable summary for the GUI panel
+    const char*    label = "";       // static label; safe to copy from the real-time callback
 };
 
 // A single biquad notch/lowpass section, used by all neutralizers.
