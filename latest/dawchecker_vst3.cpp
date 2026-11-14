@@ -81,7 +81,7 @@ struct ContainerEvidence {
 };
 
 // ============================================================================
-// 2. BAYESIAN EVIDENCE GRAPH INTERFACE
+// 2. EVIDENCE ACCUMULATOR
 // ============================================================================
 
 struct EvidenceRecord {
@@ -171,7 +171,7 @@ private:
 // ============================================================================
 
 // ============================================================================
-// 4. PLATT-SCALED EVIDENCE FUSION METAMODEL
+// 4. LOGISTIC HEURISTIC SCORE MAPPING
 // ============================================================================
 
 class EvidenceFusionEngine {
@@ -452,7 +452,7 @@ private:
         while (pipeline_->isFrameAvailable()) {
             const FrameAnalysisResult frameResult =
                 pipeline_->processNextFrame(sensitivity_, anti_forensic_gate_);
-            const float probability = fusion_engine_->calculateTamperCertainty(
+            const float score = fusion_engine_->calculateTamperScore(
                 frameResult.phase_coherence,
                 frameResult.high_freq_anomaly,
                 sensitivity_);
