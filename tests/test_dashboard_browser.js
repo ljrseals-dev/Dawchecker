@@ -92,10 +92,11 @@ async function main() {
     await page.goto('http://127.0.0.1:' + address.port + '/');
     await page.waitForFunction(() =>
       document.getElementById('scoreNum') &&
-      document.getElementById('scoreNum').textContent === '100'
+      document.getElementById('scoreNum').textContent === '12'
     );
 
-    assert.equal(await page.locator('#scoreNum').textContent(), '100');
+    assert.equal(await page.locator('#scoreNum').textContent(), '12');
+    assert.equal(await page.locator('#scoreSt').textContent(), 'CSF DENY ENTRIES');
     assert.equal(await page.locator('#banList img').count(), 0,
       'untrusted ban metadata is rendered as text, not HTML');
     assert.match(await page.locator('#banList').textContent(), /<img src=x onerror=alert\(1\)>/);
