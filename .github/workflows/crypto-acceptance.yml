@@ -37,3 +37,9 @@ jobs:
 
       - name: Run engine and SHA-256 tests
         run: ctest --test-dir build --output-on-failure
+      - name: Configure ASan and UBSan build
+        run: cmake -S . -B build-sanitizers -DCMAKE_BUILD_TYPE=Debug -DDAWCHECKER_REQUIRE_CRYPTO=ON -DDAWCHECKER_ENABLE_SANITIZERS=ON
+      - name: Build with ASan and UBSan
+        run: cmake --build build-sanitizers --parallel 2
+      - name: Run tests with ASan and UBSan
+        run: ctest --test-dir build-sanitizers --output-on-failure
