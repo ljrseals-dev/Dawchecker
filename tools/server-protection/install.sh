@@ -7,6 +7,14 @@ OPT_DIR="/opt/server-protection"
 BIN_DIR="/usr/local/bin"
 LOG_DIR="/var/log/server-protection"
 CRON_MSV="0 */2 * * *"
+CSF_TMP_DIR=""
+
+cleanup_tmp() {
+  if [[ -n "$CSF_TMP_DIR" && -d "$CSF_TMP_DIR" ]]; then
+    rm -rf -- "$CSF_TMP_DIR"
+  fi
+}
+trap cleanup_tmp EXIT
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[$(date '+%F %T')]${NC} $*"; }
@@ -53,11 +61,11 @@ install_csf() {
     return 0
   fi
   log "Installing CSF..."
-  cd /tmp
-  wget -q https://download.configserver.com/csf.tgz
-  tar -xzf csf.tgz
-  cd csf && sh install.sh
-  cd / && rm -rf /tmp/csf /tmp/csf.tgz
+  CSF_TMP_DIR="$(mktemp -d /tmp/server-protection-csf.XXXXXX)"
+  wget -q -O "$CSF_TMP_DIR/csf.tgz" https://download.configserver.com/csf.tgz
+  tar -xzf "$CSF_TMP_DIR/csf.tgz" -C "$CSF_TMP_DIR"
+  [[ -f "$CSF_TMP_DIR/csf/install.sh" ]] || { err "CSF archive did not contain install.sh"; exit 1; }
+  (cd "$CSF_TMP_DIR/csf" && sh install.sh)
   command -v csf >/dev/null 2>&1 || { err "CSF install failed"; exit 1; }
   log "CSF installed"
 }
@@ -102,15 +110,34 @@ install_files() {
 }
 
 setup_cron() {
-  if crontab -l 2>/dev/null | grep -q msv-blocklist-update; then
+  if ! command -v crontab >/dev/null 2>&1; then
+    warn "crontab is unavailable; skipping scheduled MSV updates"
+    return 0
+  fi
+
+  local current_cron
+  current_cron="$(crontab -l 2>/dev/null || true)"
+  if grep -q 'msv-blocklist-update' <<<"$current_cron"; then
     info "MSV cron already present"
   else
-    (crontab -l 2>/dev/null; echo "$CRON_MSV $BIN_DIR/msv-blocklist-update.sh >> $LOG_DIR/msv-blocklist.log 2>&1") | crontab -
+    {
+      if [[ -n "$current_cron" ]]; then printf '%s\n' "$current_cron"; fi
+      printf '%s\n' "$CRON_MSV $BIN_DIR/msv-blocklist-update.sh >> $LOG_DIR/msv-blocklist.log 2>&1"
+    } | crontab -
     log "Cron: MSV blocklist every 2 hours"
   fi
 }
 
 setup_systemd() {
+  if ! command -v systemctl >/dev/null 2>&1 || [[ ! -d /run/systemd/system ]]; then
+    warn "systemd is unavailable; skipping service installation and activation"
+    return 0
+  fi
+  if [[ ! -f "$OPT_DIR/systemd/server-protection.service" ]]; then
+    warn "systemd unit is missing; skipping service installation"
+    return 0
+  fi
+
   log "Installing systemd unit..."
   cp -f "$OPT_DIR/systemd/server-protection.service" /etc/systemd/system/server-protection.service
   systemctl daemon-reload
