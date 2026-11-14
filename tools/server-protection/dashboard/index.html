@@ -391,7 +391,7 @@ function renderBans(){
     </div>`;
   }).join('');
   list.innerHTML=h;
-  document.getElementById('banCount').textContent = BANS.length + ' returned entries';
+  document.getElementById('banCount').textContent = BANS.length + (apiLive ? ' returned entries' : ' cached entries; API offline');
   updateDenyCount();
 }
 
@@ -410,7 +410,7 @@ function renderWL(){
     <span style="font-size:7px;color:#1a3a1a">${escapeHtml(w.type)}</span>
   </div>`).join('');
   list.innerHTML=h;
-  document.getElementById('wlCount').textContent = WL.length + ' returned entries';
+  document.getElementById('wlCount').textContent = WL.length + (apiLive ? ' returned entries' : ' cached entries; API offline');
 }
 
 function renderLog(){
@@ -433,7 +433,7 @@ function selectBan(i){
   let el=document.getElementById('selInfo');
   el.textContent=info;
   el.style.color=e.active?'#ff2222':'#4444aa';
-  document.getElementById('unblockBtn').disabled=!e.active;
+  document.getElementById('unblockBtn').disabled=!e.active || !apiLive;
   renderBans();
 }
 
@@ -593,6 +593,7 @@ doUnblock = async function () {
   if (!selIP || selRow < 0) return;
   const e = BANS[selRow];
   if (!e || !e.active) return;
+  if (!apiLive) { addLog('[api] offline; unblock not sent'); return; }
   try {
     addLog('[api] unblock ' + e.ip);
     await api('/unblock', { method: 'POST', body: { ip: e.ip } });
