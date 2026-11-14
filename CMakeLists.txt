@@ -246,14 +246,9 @@ if(DAWCHECKER_BUILD_GUI)
 
     install(TARGETS dawchecker_secure RUNTIME DESTINATION bin)
 
-    # Sibling .sha256 integrity file for chain-of-custody
-    add_custom_command(TARGET dawchecker_secure POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "Generating integrity manifest..."
-        COMMAND ${CMAKE_COMMAND} -E sha256sum $<TARGET_FILE:dawchecker_secure>
-                > $<TARGET_FILE:dawchecker_secure>.sha256
-        COMMENT "Writing sibling .sha256 integrity file"
-        VERBATIM
-    )
+    # The hardened build script creates the SHA-256 sidecar after all tests pass.
+    # Do not use shell redirection in add_custom_command: CMake does not run
+    # COMMAND through a shell, so ">" would be passed as a literal argument.
 endif()
 
 # ============================================================================
