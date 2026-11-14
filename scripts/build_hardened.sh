@@ -62,7 +62,7 @@ echo
 # ---------------------------------------------------------------------------
 echo "→ Checking that CTest registered at least one test..."
 TEST_LIST="$(ctest --test-dir "${BUILD_DIR}" -N)"
-printf '%s\\n' "${TEST_LIST}"
+printf '%s\n' "${TEST_LIST}"
 if ! grep -Eq 'Total Tests: [1-9][0-9]*' <<<"${TEST_LIST}"; then
     echo "ERROR: no tests are registered; refusing to report a successful build." >&2
     exit 1
