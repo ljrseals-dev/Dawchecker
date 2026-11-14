@@ -1,0 +1,33 @@
+name: Server Protection API security
+
+on:
+  push:
+    branches:
+      - "repair/**"
+    paths:
+      - "tools/server-protection/server_protection_api.py"
+      - "tests/test_server_protection_api.py"
+      - ".github/workflows/server-protection-security.yml"
+  pull_request:
+    paths:
+      - "tools/server-protection/server_protection_api.py"
+      - "tests/test_server_protection_api.py"
+      - ".github/workflows/server-protection-security.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  api-security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile API and tests
+        run: python -m py_compile tools/server-protection/server_protection_api.py tests/test_server_protection_api.py
+      - name: Run API security regression tests
+        run: python -m unittest discover -s tests -p 'test_server_protection_api.py' -v
