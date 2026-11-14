@@ -577,6 +577,9 @@ async function refreshFromApi() {
     apiLoaded = true;
     const apiStatusValue = document.getElementById('apiStatusValue');
     if (apiStatusValue) apiStatusValue.textContent = 'UNAVAILABLE';
+    const scoreLabel = document.getElementById('scoreSt');
+    if (scoreLabel) scoreLabel.textContent = Number.isFinite(totalBlocked)
+      ? 'CSF DENY ENTRIES · STALE' : 'CSF DENY COUNT UNAVAILABLE';
     const wlStatus = document.getElementById('wlStatus');
     if (wlStatus) wlStatus.textContent = 'API offline; whitelist state unknown';
     updateDenyCount();
