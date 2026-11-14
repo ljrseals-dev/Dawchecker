@@ -49,6 +49,10 @@ echo
 # ---------------------------------------------------------------------------
 # 3. Build
 # ---------------------------------------------------------------------------
+# Invalidate every known output sidecar before rebuilding. A failed build
+# must never leave an old checksum looking like evidence for a new binary.
+find "${BUILD_DIR}" -type f -name 'dawchecker_secure.sha256' -delete
+
 echo "→ Building (jobs=${JOBS})..."
 cmake --build "${BUILD_DIR}" --parallel "${JOBS}"
 echo
@@ -56,6 +60,14 @@ echo
 # ---------------------------------------------------------------------------
 # 4. Test
 # ---------------------------------------------------------------------------
+echo "→ Checking that CTest registered at least one test..."
+TEST_LIST="$(ctest --test-dir "${BUILD_DIR}" -N)"
+printf '%s\\n' "${TEST_LIST}"
+if ! grep -Eq 'Total Tests: [1-9][0-9]*' <<<"${TEST_LIST}"; then
+    echo "ERROR: no tests are registered; refusing to report a successful build." >&2
+    exit 1
+fi
+
 echo "→ Running engine tests..."
 ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 echo
@@ -87,13 +99,24 @@ echo "→ Binary: ${BIN}"
 # ---------------------------------------------------------------------------
 # 6. Integrity sidecar
 # ---------------------------------------------------------------------------
+CHECKSUM_TMP="${BIN}.sha256.tmp.$"
+cleanup_checksum() {
+    rm -f -- "${CHECKSUM_TMP}"
+}
+trap cleanup_checksum EXIT
+
 if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${BIN}" | tee "${BIN}.sha256"
+    sha256sum "${BIN}" > "${CHECKSUM_TMP}"
 elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "${BIN}" | tee "${BIN}.sha256"
+    shasum -a 256 "${BIN}" > "${CHECKSUM_TMP}"
 else
-    echo "⚠  No sha256 tool; skipping sidecar"
+    echo "ERROR: no SHA-256 utility is available; refusing to leave an unverified binary." >&2
+    exit 1
 fi
+
+# Publish the sidecar atomically, only after build and tests have succeeded.
+mv -f -- "${CHECKSUM_TMP}" "${BIN}.sha256"
+echo "  [OK] Integrity sidecar: ${BIN}.sha256"
 echo
 
 # ---------------------------------------------------------------------------
