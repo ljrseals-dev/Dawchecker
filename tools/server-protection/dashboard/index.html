@@ -338,10 +338,10 @@ body{
           </div>
           <div class="src-card">
             <div class="src-title">SERVER ENDPOINT</div>
-            <div class="src-row"><span class="src-k">status</span><span class="src-v" style="font-size:7px">127.0.0.1:8080/msv-status</span></div>
-            <div class="src-row"><span class="src-k">unblock</span><span class="src-v" style="font-size:7px">POST /unblock {ip}</span></div>
-            <div class="src-row"><span class="src-k">whitelist</span><span class="src-v" style="font-size:7px">POST /whitelist {entry}</span></div>
-            <div class="src-row"><span class="src-k">poll</span><span class="src-v">2000ms</span></div>
+            <div class="src-row"><span class="src-k">status</span><span class="src-v" style="font-size:7px">/api/status</span></div>
+            <div class="src-row"><span class="src-k">unblock</span><span class="src-v" style="font-size:7px">POST /api/unblock {ip}</span></div>
+            <div class="src-row"><span class="src-k">whitelist</span><span class="src-v" style="font-size:7px">POST /api/whitelist {entry}</span></div>
+            <div class="src-row"><span class="src-k">poll</span><span class="src-v">10000ms</span></div>
           </div>
           <div class="src-card">
             <div class="src-title">CSF INTEGRATION</div>
@@ -358,9 +358,9 @@ body{
           <div class="src-card">
             <div class="src-title">GITHUB REPO</div>
             <div class="src-row"><span class="src-k">repo</span><span class="src-v" style="font-size:7px">ljrseals-dev/Dawchecker</span></div>
-            <div class="src-row"><span class="src-k">gui</span><span class="src-v" style="font-size:7px">server_protection_pro.html</span></div>
-            <div class="src-row"><span class="src-k">daemon</span><span class="src-v" style="font-size:7px">server-protection.py</span></div>
-            <div class="src-row"><span class="src-k">csf scripts</span><span class="src-v" style="font-size:7px">scripts/csf-sync.sh</span></div>
+            <div class="src-row"><span class="src-k">gui</span><span class="src-v" style="font-size:7px">tools/server-protection/dashboard/index.html</span></div>
+            <div class="src-row"><span class="src-k">daemon</span><span class="src-v" style="font-size:7px">tools/server-protection/server_protection_api.py</span></div>
+            <div class="src-row"><span class="src-k">csf scripts</span><span class="src-v" style="font-size:7px">tools/server-protection/msv-blocklist-update.sh</span></div>
           </div>
         </div>
       </div>
