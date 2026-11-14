@@ -150,6 +150,7 @@ async function flush() {
   apiUnavailable = true;
   await context.refreshFromApi();
   assert.equal(getElementById('apiStatusValue').textContent, 'UNAVAILABLE');
+  assert.equal(getElementById('scoreSt').textContent, 'CSF DENY ENTRIES · STALE');
   assert.match(getElementById('denyCount').textContent, /last API count; API offline/,
     'API outage labels the previous count as stale instead of displaying zero');
   assert.match(getElementById('banCount').textContent, /cached entries; API offline/,
