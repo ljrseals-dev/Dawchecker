@@ -21,6 +21,7 @@
 #include "core/SharedFeaturePipeline.h"
 #include "core/RealtimeEvidenceQueue.h"
 #include "core/EvidenceAccumulator.h"
+#include "core/EvidenceFusionEngine.h"
 
 // VST3 SDK Core Structural Includes
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
@@ -39,6 +40,7 @@ using dawchecker::dsp::SharedFeaturePipeline;
 using dawchecker::dsp::RealtimeEvidenceEvent;
 using dawchecker::dsp::RealtimeEvidenceQueue;
 using dawchecker::dsp::EvidenceAccumulator;
+using dawchecker::dsp::EvidenceFusionEngine;
 
 // Stable identifier for the DawChecker VST3 plugin component.
 static const FUID kDawCheckerPluginUID(0xDA434845, 0x434B4552, 0x53454355, 0x5245FFFF);
@@ -57,25 +59,6 @@ enum {
 // ============================================================================
 // 3. REAL-TIME CORE FORENSIC DSP PIPELINE
 // ============================================================================
-
-// ============================================================================
-// 4. LOGISTIC HEURISTIC SCORE MAPPING
-// ============================================================================
-
-class EvidenceFusionEngine {
-public:
-    EvidenceFusionEngine() : alpha_(-2.4f), beta_(0.35f) {}
-
-    float calculateTamperScore(float coherence, float hfAnomaly, float sensitivity) const noexcept {
-        float score = ((1.0f - coherence) * 1.75f) + (hfAnomaly * sensitivity * 2.25f);
-        double logit = (static_cast<double>(score) * alpha_) + beta_;
-        return static_cast<float>(1.0 / (1.0 + std::exp(-logit)));
-    }
-
-private:
-    double alpha_;
-    double beta_;
-};
 
 // ============================================================================
 // 7. VST3 INTEGRATION COMPONENT IMPLEMENTATION
