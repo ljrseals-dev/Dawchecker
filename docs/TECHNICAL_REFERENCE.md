@@ -269,7 +269,7 @@ Documented in `docs/HARDENING.md`:
 ```bash
 ./scripts/vendor_imgui.sh
 ./scripts/build_hardened.sh
-# artifacts: build/dawchecker_secure , build/engine_tests
+# artifacts: build/dawchecker_secure, build/engine_tests, build/audio_pipeline_tests, build/evidence_accumulator_tests
 ```
 
 | CMake target | Description |
@@ -302,11 +302,15 @@ ImGui missing → core + tests still build; GUI skipped with warning.
 
 Coverage includes:
 
-- Silence → low tamper score, not compromised  
-- 19.2 kHz tone → ultrasonic confidence rises  
-- `checkedMul` overflow detection  
-- `isSafeExportPath` traversal rejection  
-- `CodecScanner::scan()` smoke execution  
+- Silence → low tamper score, not compromised
+- 19.2 kHz tone → ultrasonic confidence rises
+- `checkedMul` overflow detection and `isSafeExportPath` traversal rejection
+- `CodecScanner::scan()` smoke execution
+- Shared feature frame/hop/ring behavior, low/high-band FFT separation,
+  non-finite input sanitization, and allocation-counter checks
+- SPSC queue capacity, FIFO ordering, concurrent producer/consumer behavior,
+  and allocation-free enqueue/dequeue
+- Evidence accumulator score-band and relationship behavior
 
 No GoogleTest dependency (minimal harness).
 
