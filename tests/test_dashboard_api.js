@@ -130,8 +130,7 @@ async function flush() {
   assert.match(getElementById('wlList').innerHTML, /203\.0\.113\.10/, 'whitelist refreshes after unblock');
 
   bans = [{
-    ip: '203.0.113.11', cc: 'ZZ', org: 'API failure test',
-    set: 'TEST', hits: 1, active: true
+    ip: '203.0.113.11', source: 'csf.deny', active: true
   }];
   await context.refreshFromApi();
   context.selectBan(0);
