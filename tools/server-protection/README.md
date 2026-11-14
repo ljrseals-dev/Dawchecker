@@ -120,3 +120,70 @@ tail -f /var/log/server-protection/api.log
 - Bind address is loopback by default (`SPP_HOST=127.0.0.1`)
 - Aggressive IP lists can false-positive — keep console access when first enabling
 - Ensure SSH is allowed in CSF before remote `csf -ra`
+
+
+---
+
+## Firewall discovery preflight (read-only by default)
+
+`spp-discover.sh` inventories the host firewall manager and backend before any
+future firewall integration is considered. It is separate from the CSF-based
+production installer above; it does **not** install packages, enable services,
+or alter firewall rules.
+
+Run from the repository checkout:
+
+```bash
+bash tools/server-protection/spp-discover.sh
+printf 'exit=%s\\n' "$?"
+```
+
+Default execution writes only to stdout/stderr. It does not create a snapshot,
+write to the journal, or modify host configuration. Optional persistence is
+explicit:
+
+```bash
+sudo SPP_SNAPSHOT_DIR=/var/tmp/spp-discovery \\
+  bash tools/server-protection/spp-discover.sh
+```
+
+Set `SPP_USE_LOGGER=1` only when an explicit syslog/journal summary is wanted.
+The timestamped snapshot contains the actual output of each successful probe,
+a `RESULT` file, per-probe success/failure fields, and a SHA-256 manifest.
+Unavailable probes are recorded; an empty successful output is not silently
+reported as a captured ruleset.
+
+### Interpretation and fail-closed behavior
+
+The `RESULT` includes separate `RULES_PRESENT_NFT` and
+`RULES_PRESENT_IPTABLES` fields. Rule presence is not treated as proof of
+manager ownership. A managed frontend requires an active service plus its
+manager-specific runtime evidence; standalone nftables/iptables requires its
+own active systemd service and a non-empty ruleset. A Docker/CrowdSec table or
+chain by itself is not enough.
+
+| Exit | Confidence | Meaning |
+|---:|---|---|
+| 0 | `confirmed` | One manager and a known backend were identified |
+| 1 | `partial` | A manager is active, but ownership or backend evidence is incomplete |
+| 2 | `unknown` / conflict | No safe owner was identified, or multiple rule planes/managers conflict |
+
+An installer must refuse on exit 2. Exit 1 must not be accepted implicitly;
+any later installer must require an explicit operator override and explain the
+unresolved evidence. Even exit 0 is discovery evidence, not authorization to
+change the firewall.
+
+### Mock-only regression tests
+
+The tests use an isolated child `PATH` containing only command stubs and fixture
+paths for `/etc/os-release` and the systemd runtime directory. They do not
+invoke the host firewall tools:
+
+```bash
+bash -n tools/server-protection/spp-discover.sh tests/test_spp_discover.sh
+bash tests/test_spp_discover.sh
+```
+
+CI runs these tests alongside the existing Server Protection API security
+regressions. Neither the discovery script nor its tests install or execute the
+production installer.
