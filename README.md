@@ -4,7 +4,7 @@
 
 DawChecker contains a C++20 audio-analysis core, an optional desktop GUI, SHA-256 hashing support, and source for a VST3 plugin component.
 
-**Verification boundary:** the standalone core and its CTest suite are built in CI. The VST3 translation unit is not part of the current CMake build because the Steinberg VST3 SDK consumer target has not been added. The VST3 integration is therefore not build-verified or release-ready.
+**Verification boundary:** the standalone core and CTest suite run in CI, including an ASan/UBSan build. A separate compile-only target builds the VST3 plugin translation unit against a pinned Steinberg SDK. This does not package a `.vst3` bundle or verify loading and behavior in a VST3 host.
 
 This project does not claim courtroom validation, proof of authenticity, signer authentication, or a calibrated probability of tampering. Its analysis outputs are heuristic signals that require expert interpretation and independent corroboration.
 
@@ -20,13 +20,13 @@ This project does not claim courtroom validation, proof of authenticity, signer 
 - No heap allocation in its sample-write and frame-processing methods
 - A relative spectral split at half the Nyquist range, not a fixed-Hz cutoff
 
-The `audio_pipeline_tests` target checks frame availability, overlap behavior, ring wrap/overflow, finite metrics, supported sample-rate configurations, and zero heap allocations using a test-only global allocation counter.
+The `audio_pipeline_tests` target checks frame availability, overlap behavior, ring wrap/overflow, finite metrics, supported sample-rate configurations, low/high-band FFT separation, non-finite input sanitization, and zero heap allocations using a test-only global allocation counter. `engine_tests` also checks that `MSV_Engine::process` performs no heap allocations after preparation.
 
 ### 2. Logistic score mapping
 
 The VST3 source contains a logistic mapping from phase-coherence and high-frequency-anomaly features to a score in the range `[0.0, 1.0]`.
 
-The current coefficients (`-2.4` and `0.35`) are implementation constants, not a validated calibration dataset. The result is a **heuristic score**, not a calibrated posterior probability, likelihood ratio, or proof of tampering.
+The current coefficients (`2.4` and `0.35`, with a positive slope) are implementation constants, not a validated calibration dataset. Stronger anomaly features increase the heuristic score, but the mapping is not calibrated. The result is a **heuristic score**, not a calibrated posterior probability, likelihood ratio, or proof of tampering.
 
 ### 3. Evidence accumulation
 
@@ -66,9 +66,9 @@ The VST3 source files are:
 - `Source/dawchecker_vst3.cpp`
 - `latest/dawchecker_vst3.cpp`
 
-They contain the processor implementation, the evidence worker, channel-layout handling, and the optional 80 Hz tracking tone. These source changes have **not** been compiled against the Steinberg SDK in CI.
+They contain the processor implementation, the evidence worker, channel-layout handling, and the optional 80 Hz tracking tone. CI compiles `Source/dawchecker_vst3.cpp` through the `dawchecker_vst3_compilecheck` object target against a pinned Steinberg VST3 SDK revision. A static source-contract test also keeps the `Source/` and `latest/` copies aligned.
 
-Before treating the VST3 integration as verified, add an SDK-backed CMake consumer target that includes `src/`, links `dawchecker_core` and the appropriate Steinberg VST3 SDK targets, and builds against a pinned/available Steinberg VST3 SDK. Until that exists and passes CI, the VST3 integration remains a manual release blocker.
+The SDK compile check verifies C++ compatibility with the pinned SDK headers and core interfaces. It does not link a distributable plugin, validate factory loading, exercise audio in a host, or verify the tracking tone. A packaged VST3 target and host-level validation remain release blockers.
 
 ## Parameter mapping
 
@@ -76,7 +76,7 @@ Before treating the VST3 integration as verified, add an SDK-backed CMake consum
 - `kParamFusionThreshold` — threshold applied to the heuristic score.
 - `kParamAntiForensicGate` — gate applied to the high-frequency anomaly feature.
 
-The optional tracking tone is part of the VST3 source implementation only; its behavior is not verified until the SDK-backed target is built and tested.
+The optional tracking tone is part of the VST3 source implementation only; its runtime behavior is not host-verified by the compile-only CI target.
 
 ## Server Protection Toolkit
 
