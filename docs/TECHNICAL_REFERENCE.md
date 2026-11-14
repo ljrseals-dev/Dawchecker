@@ -1,4 +1,4 @@
-# DawChecker Secure Ultimate — Technical Reference Book
+# DawChecker — Technical Reference
 
 **Version:** 3.0.0  
 **Organization:** TheRealla Audio Forensic Labs  
@@ -13,7 +13,7 @@
 2. [Repository Layout](#2-repository-layout)
 3. [Audio Forensic Core](#3-audio-forensic-core)
 4. [GUI Application](#4-gui-application)
-5. [VST3 Monolith](#5-vst3-monolith)
+5. [VST3 plugin component](#5-vst3-plugin-component)
 6. [Security Hardening](#6-security-hardening)
 7. [Build System](#7-build-system)
 8. [Testing](#8-testing)
@@ -28,11 +28,11 @@
 
 ## 1. System Overview
 
-DawChecker Secure Ultimate is a **court-oriented audio forensics platform** with two operational domains:
+DawChecker is an **audio-forensics application with a VST3 plugin component**. The repository also contains an independently operated Linux server-protection toolkit. These are separate programs with separate runtime boundaries:
 
 | Domain | Component | Runtime | Network |
 |--------|-----------|---------|---------|
-| **A. Forensic workstation** | Desktop GUI + optional VST3 | User session | **None** at runtime |
+| **A. Audio application** | Desktop GUI + VST3 plugin component | User session | **None** at runtime |
 | **B. Server hardening** | Server Protection Pro | Root on Linux host | Loopback API + outbound list fetch (admin only) |
 
 These domains share branding (“MSV”) but **do not share process space, libraries, or network policy**. The audio application never calls the server toolkit.
@@ -41,7 +41,7 @@ These domains share branding (“MSV”) but **do not share process space, libra
 
 1. **Hermetic DSP** — core analysis avoids external FFT libraries in the VST3 path; modular detectors in the standalone engine.
 2. **Evidence fusion** — multi-detector scores aggregated into a tamper score (0–100).
-3. **Chain-of-custody aids** — binary `.sha256` sidecar, secure buffer zeroing, path traversal rejection.
+3. **Integrity and safe-handling utilities** — SHA-256 sidecar generation, secure buffer zeroing, and path-traversal rejection. A checksum alone does not establish chain of custody.
 4. **Offline by policy** — no telemetry, no license server, no phone-home (see `docs/HARDENING.md`).
 
 ### 1.2 Design pillars (server)
@@ -70,8 +70,8 @@ Dawchecker-Secure-Ultimate-main/
 │   ├── main.cpp
 │   ├── core/                      # DSP + security library
 │   └── gui/                       # ImGui panels
-├── Source/dawchecker_vst3.cpp     # Legacy/monolithic VST3
-├── latest/dawchecker_vst3.cpp     # Latest VST3 snapshot
+├── Source/dawchecker_vst3.cpp     # VST3 plugin component source
+├── latest/dawchecker_vst3.cpp     # Alternate VST3 plugin source snapshot
 ├── tests/EngineTests.cpp
 └── tools/server-protection/       # Server Protection Pro
     ├── install.sh
@@ -100,7 +100,7 @@ Central aggregator. Processes one sample pair per call:
 
 ```text
 process(referenceSample, liveSample, out) → cleaned sample
-snapshot() → EngineSnapshot   // lock-free read from GUI thread
+snapshot() → EngineSnapshot   // atomic snapshot read by GUI thread
 ```
 
 | Field / member | Type | Description |
@@ -217,11 +217,11 @@ Score labels: Clean ≤20 · Low-Level Artifacts ≤50 · Attention Recommended 
 
 ---
 
-## 5. VST3 Monolith
+## 5. VST3 plugin component
 
 **Files:** `Source/dawchecker_vst3.cpp`, `latest/dawchecker_vst3.cpp`
 
-Single-component Steinberg VST3 effect (`SingleComponentEffect`):
+The VST3 plugin component is implemented as a Steinberg `SingleComponentEffect`:
 
 - Shared fixed-storage feature pipeline (512-sample frame, 128-sample hop, bounded 16,384-sample ring)
 - Preallocated DFT working buffers; no heap allocation in the pipeline write/process methods
@@ -233,7 +233,7 @@ Single-component Steinberg VST3 effect (`SingleComponentEffect`):
 - No digital-signature generation or signer-identity claim; a digest alone does not prove provenance
 - Parameters: sensitivity, fusion threshold, anti-forensic gate
 
-**Factory:** distributable analyzer-class registration; UID defined in translation unit.
+**Factory:** class registration and UID are declared in the translation unit. This metadata has not been validated by an SDK-backed build.
 
 **Verification boundary:** CI builds and tests the extracted core pipeline and queue, including allocation-counter checks. It does not compile the VST3 translation unit. Build of VST3 requires the Steinberg VST3 SDK (not bundled in the standalone CMake app path), and the current CMake project still has no VST3 consumer target. The SDK-backed target must include `src/`, link `dawchecker_crypto` / `OpenSSL::Crypto`, and pass an SDK-backed build before VST3 integration is release-verified.
 
@@ -433,7 +433,7 @@ curl -s http://127.0.0.1:8080/api/status | jq .
 
 ### 12.4 Forensic use (audio)
 
-Treat automated scores as **decision support**. Preserve originals; export only via validated paths; record tool version and binary `.sha256` with case notes.
+Treat automated scores as **advisory decision-support signals**, not findings of authenticity or tampering. Preserve originals; export only via validated paths; record tool version and binary `.sha256` with case notes. A checksum can detect byte changes relative to a trusted digest but does not independently establish provenance or chain of custody.
 
 ---
 
@@ -476,7 +476,7 @@ Treat automated scores as **decision support**. Preserve originals; export only 
 
 ---
 
-*End of Technical Reference Book — DawChecker Secure Ultimate v3.0.0*
+*End of Technical Reference — DawChecker v3.0.0*
 
 ---
 
