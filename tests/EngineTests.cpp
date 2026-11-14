@@ -4,6 +4,9 @@
 #include "core/SecurityHardening.h"
 #include "core/CodecScanner.h"
 #include <cstdio>
+#include <atomic>
+#include <cstdlib>
+#include <new>
 #include <cmath>
 #include <algorithm>
 #include <array>
@@ -16,6 +19,8 @@
 
 namespace {
 int g_failures = 0;
+std::atomic<bool> g_track_allocations{false};
+std::atomic<std::size_t> g_allocation_count{0};
 
 void check(bool condition, const char* what)
 {
@@ -30,6 +35,27 @@ void check(bool condition, const char* what)
     }
 }
 } // namespace
+
+void* operator new(std::size_t size)
+{
+    if (g_track_allocations.load(std::memory_order_relaxed))
+        g_allocation_count.fetch_add(1, std::memory_order_relaxed);
+    if (void* memory = std::malloc(size == 0 ? 1 : size)) return memory;
+    throw std::bad_alloc();
+}
+
+void* operator new[](std::size_t size)
+{
+    if (g_track_allocations.load(std::memory_order_relaxed))
+        g_allocation_count.fetch_add(1, std::memory_order_relaxed);
+    if (void* memory = std::malloc(size == 0 ? 1 : size)) return memory;
+    throw std::bad_alloc();
+}
+
+void operator delete(void* memory) noexcept { std::free(memory); }
+void operator delete[](void* memory) noexcept { std::free(memory); }
+void operator delete(void* memory, std::size_t) noexcept { std::free(memory); }
+void operator delete[](void* memory, std::size_t) noexcept { std::free(memory); }
 
 int main()
 {
@@ -46,6 +72,27 @@ int main()
         check(std::abs(out) < 1e-6, "Silent input produces silent output");
         check(snap.tamperScore < 5.0, "Silent input produces a low tamper score");
         check(!snap.isCompromised, "Silent input is not flagged as compromised");
+    }
+
+    // --- Real-time contract: detector processing must not allocate.
+    {
+        dsp::MSV_Engine engine(48000.0, 5.0);
+        double out = 0.0;
+        for (int i = 0; i < 1024; ++i) {
+            const double sample = 0.1 * std::sin(2.0 * M_PI * 440.0 *
+                                                static_cast<double>(i) / 48000.0);
+            engine.process(sample, sample * 1.001, out);
+        }
+        g_allocation_count.store(0, std::memory_order_relaxed);
+        g_track_allocations.store(true, std::memory_order_release);
+        for (int i = 0; i < 4096; ++i) {
+            const double sample = 0.1 * std::sin(2.0 * M_PI * 440.0 *
+                                                static_cast<double>(i) / 48000.0);
+            engine.process(sample, sample * 1.001, out);
+        }
+        g_track_allocations.store(false, std::memory_order_release);
+        check(g_allocation_count.load(std::memory_order_relaxed) == 0,
+              "MSV_Engine::process performs zero heap allocations after prepare");
     }
 
     // --- Engine sanity: injected 19.2kHz tone should raise the ultrasonic score.
