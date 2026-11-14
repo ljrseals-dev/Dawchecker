@@ -1,0 +1,29 @@
+name: Dashboard acceptance
+
+on:
+  push:
+    branches:
+      - "repair/p1-dashboard-truthfulness"
+  pull_request:
+    paths:
+      - "tools/server-protection/dashboard/index.html"
+      - "tests/test_dashboard_api.js"
+      - ".github/workflows/dashboard-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Check dashboard JavaScript syntax
+        run: |
+          node --check tests/test_dashboard_api.js
+          node -e "const fs=require('fs'); const h=fs.readFileSync('tools/server-protection/dashboard/index.html','utf8'); const s=[...h.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].map(x=>x[1]); if(s.length!==2) process.exit(1); s.forEach((v,i)=>fs.writeFileSync('/tmp/dashboard-'+i+'.js',v));"
+          node --check /tmp/dashboard-0.js
+          node --check /tmp/dashboard-1.js
+      - name: Run dashboard API integration tests
+        run: node tests/test_dashboard_api.js
