@@ -88,6 +88,8 @@ def run_cmd(argv: list[str], timeout: int = 120) -> tuple[int, str, str]:
         return 127, "", f"{argv[0]} not found"
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
+    except OSError as exc:
+        return 126, "", str(exc)
 
 
 def require_csf() -> None:
@@ -287,7 +289,19 @@ def start_job(name: str, argv: list[str], timeout: int = 600) -> None:
             }
         add_log(f"[{name}] done rc={code}")
 
-    threading.Thread(target=worker, daemon=True).start()
+    try:
+        threading.Thread(target=worker, daemon=True).start()
+    except Exception as exc:
+        detail = f"could not start worker: {exc}"
+        with _JOBS_LOCK:
+            _JOBS[name] = {
+                "state": "error",
+                "detail": detail,
+                "finished": _now(),
+                "rc": 125,
+            }
+        add_log(f"[{name}] {detail}", "error")
+        raise RuntimeError(detail) from exc
 
 
 def trigger_clamav() -> dict[str, Any]:
