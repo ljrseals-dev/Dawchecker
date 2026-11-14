@@ -307,7 +307,7 @@ body{
         </div>
       </div>
 
-      <!-- EVENT LOG -->
+      <!-- DASHBOARD SESSION LOG -->
       <div class="tab-pane" id="tab-log">
         <div class="log-wrap" id="logWrap"></div>
       </div>
@@ -316,7 +316,7 @@ body{
       <div class="tab-pane" id="tab-src">
         <div class="src-wrap">
           <div class="src-card">
-            <div class="src-title">BITWIRE_INBOUND</div>
+            <div class="src-title">BITWIRE_IN</div>
             <div class="src-row"><span class="src-k">entries</span><span class="src-v" id="bwCount">0</span></div>
             <div class="src-row"><span class="src-k">interval</span><span class="src-v">7200s</span></div>
             <div class="src-row"><span class="src-k">url</span><span class="src-v" style="font-size:7px">bitwire-it/ipblocklist/main/inbound.txt</span></div>
@@ -604,7 +604,16 @@ startScan = async function () {
         }
       } catch (_) { /* keep polling */ }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); scanRunning = false; }, 600000);
+    setTimeout(() => {
+      clearInterval(poll);
+      if (scanRunning) {
+        scanRunning = false;
+        if (btn) { btn.textContent = '▶ RUN CLAMAV SCAN'; btn.classList.remove('scanning'); }
+        const st = document.getElementById('clamStatus');
+        if (st) { st.textContent = 'UNKNOWN'; st.className = 'av-badge av-unk'; }
+        addLog('[clamav] status polling timed out; completion is unverified');
+      }
+    }, 600000);
   } catch (err) {
     scanRunning = false;
     if (btn) { btn.textContent = '▶ RUN CLAMAV SCAN'; btn.classList.remove('scanning'); }
@@ -637,7 +646,16 @@ startRkh = async function () {
         }
       } catch (_) {}
     }, 2000);
-    setTimeout(() => { clearInterval(poll); rkhRunning = false; }, 600000);
+    setTimeout(() => {
+      clearInterval(poll);
+      if (rkhRunning) {
+        rkhRunning = false;
+        if (btn) { btn.textContent = '▶ RUN RKHUNTER CHECK'; btn.classList.remove('scanning'); }
+        const st = document.getElementById('rkhStatus');
+        if (st) { st.textContent = 'UNKNOWN'; st.className = 'av-badge av-unk'; }
+        addLog('[rkhunter] status polling timed out; completion is unverified');
+      }
+    }, 600000);
   } catch (err) {
     rkhRunning = false;
     if (btn) { btn.textContent = '▶ RUN RKHUNTER CHECK'; btn.classList.remove('scanning'); }
