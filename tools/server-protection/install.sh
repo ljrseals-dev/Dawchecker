@@ -22,8 +22,6 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*"; }
 info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 
-[[ $EUID -eq 0 ]] || { err "Run as root"; exit 1; }
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 detect_os() {
@@ -157,6 +155,7 @@ run_msv_once() {
 }
 
 main() {
+  [[ $EUID -eq 0 ]] || { err "Run as root"; return 1; }
   echo ""
   echo "=============================================="
   echo "  Server Protection Pro — Production Install"
@@ -184,4 +183,6 @@ main() {
   echo ""
 }
 
-main
+if [[ "${SPP_INSTALLER_LIB_ONLY:-0}" != "1" ]]; then
+  main "$@"
+fi
