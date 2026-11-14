@@ -4,7 +4,7 @@
  * ============================================================================
  * This file contains the complete code for the DawChecker Secure Ultimate platform.
  * It integrates real-time DSP, shared feature extraction pipelines, a 
- * Bayesian evidence graph, SHA-256 hashing (not digital signing), and structural container scanners.
+ * Evidence score accumulation, SHA-256 hashing (not digital signing), and structural container scanners.
  * * Standards Compliance: C++20 standard, strict compilation hardening, zero stubs.
  * ============================================================================
  */
@@ -59,7 +59,7 @@ enum {
 // 1. DATA STRUCTURE TYPES & SYSTEM ENUMS
 // ============================================================================
 
-enum class EvidenceState { HighlyAuthentic, Consistent, Indeterminate, Anomalous, Tampered };
+enum class EvidenceScoreBand { StrongSignal, ElevatedSignal, Indeterminate, WeakSignal, MinimalSignal };
 enum class AntiForensicMethod { AddedNoise, DitherMasking, Recompression, SpectralPainting, PhaseRandomization, None };
 enum class ContainerType { WAV, FLAC, MP3, AAC, Unknown };
 
@@ -84,71 +84,86 @@ struct ContainerEvidence {
 // 2. BAYESIAN EVIDENCE GRAPH INTERFACE
 // ============================================================================
 
-struct EvidenceNode {
+struct EvidenceRecord {
     std::string id;
-    float prior_probability;
-    float conditional_probability;
+    float base_score = 0.0f;
+    float accumulated_score = 0.0f;
     std::string narrative_summary;
-    EvidenceState state;
+    EvidenceScoreBand band = EvidenceScoreBand::Indeterminate;
 };
 
-class EvidenceGraph {
+class EvidenceAccumulator {
 public:
-    EvidenceGraph() {
-        addNode("root_provenance", 0.5f, "Initial system baseline analysis trace.");
+    EvidenceAccumulator() {
+        addEvidence("root_provenance", 0.5f, "Initial system baseline analysis trace.");
     }
 
-    void addNode(const std::string& id, float prior, const std::string& narrative) {
-        EvidenceNode node;
-        node.id = id;
-        node.prior_probability = prior;
-        node.conditional_probability = prior;
-        node.narrative_summary = narrative;
-        
-        if (prior > 0.85f) node.state = EvidenceState::HighlyAuthentic;
-        else if (prior > 0.65f) node.state = EvidenceState::Consistent;
-        else if (prior > 0.35f) node.state = EvidenceState::Indeterminate;
-        else if (prior > 0.15f) node.state = EvidenceState::Anomalous;
-        else node.state = EvidenceState::Tampered;
+    void addEvidence(const std::string& id, float score,
+                     const std::string& narrative) {
+        const float boundedScore = std::clamp(score, 0.0f, 1.0f);
+        EvidenceRecord record;
+        record.id = id;
+        record.base_score = boundedScore;
+        record.accumulated_score = boundedScore;
+        record.narrative_summary = narrative;
 
-        nodes_[id] = node;
+        if (boundedScore > 0.85f) record.band = EvidenceScoreBand::StrongSignal;
+        else if (boundedScore > 0.65f) record.band = EvidenceScoreBand::ElevatedSignal;
+        else if (boundedScore > 0.35f) record.band = EvidenceScoreBand::Indeterminate;
+        else if (boundedScore > 0.15f) record.band = EvidenceScoreBand::WeakSignal;
+        else record.band = EvidenceScoreBand::MinimalSignal;
+
+        records_[id] = record;
     }
 
-    void addEdge(const std::string& parent_id, const std::string& child_id, float weight) {
-        edges_[parent_id].push_back({child_id, weight});
+    void relate(const std::string& parentId, const std::string& childId,
+                float weight) {
+        links_[parentId].push_back({childId, std::clamp(weight, 0.0f, 1.0f)});
     }
 
-    void evaluateGraphBayesian() {
-        for (auto& [parent_id, child_edges] : edges_) {
-            if (nodes_.find(parent_id) == nodes_.end()) continue;
-            float parent_prob = nodes_[parent_id].conditional_probability;
+    void accumulateEvidenceScores() {
+        for (auto& [parentId, childLinks] : links_) {
+            const auto parent = records_.find(parentId);
+            if (parent == records_.end()) continue;
+            const float parentScore = parent->second.accumulated_score;
 
-            for (auto& edge : child_edges) {
-                if (nodes_.find(edge.child_id) == nodes_.end()) continue;
-                auto& child = nodes_[edge.child_id];
-                
-                float updated = (child.prior_probability * edge.weight * parent_prob) / 
-                                ((child.prior_probability * parent_prob) + (1.0f - parent_prob) * 0.5f);
-                child.conditional_probability = std::clamp(updated, 0.0f, 1.0f);
+            for (const auto& link : childLinks) {
+                const auto childIt = records_.find(link.child_id);
+                if (childIt == records_.end()) continue;
+                auto& child = childIt->second;
+
+                const float numerator =
+                    child.base_score * link.weight * parentScore;
+                const float denominator =
+                    (child.base_score * parentScore) +
+                    ((1.0f - parentScore) * 0.5f);
+                const float updated = denominator > 0.0f
+                    ? numerator / denominator
+                    : child.base_score;
+                child.accumulated_score = std::clamp(updated, 0.0f, 1.0f);
             }
         }
     }
 
     std::string generateForensicNarrative() {
-        evaluateGraphBayesian();
-        std::stringstream ss;
-        ss << "=== FORENSIC EVIDENCE GRAPH REPORT ===\n";
-        for (const auto& [id, node] : nodes_) {
-            ss << "Node [" << id << "] -> Probability: " << (node.conditional_probability * 100.0f) << "%\n"
-               << "   Narrative: " << node.narrative_summary << "\n";
+        accumulateEvidenceScores();
+        std::stringstream stream;
+        stream << "=== FORENSIC EVIDENCE SUMMARY ===\n";
+        for (const auto& [id, record] : records_) {
+            stream << "Record [" << id << "] -> Score: "
+                   << (record.accumulated_score * 100.0f) << "%\n"
+                   << "   Narrative: " << record.narrative_summary << "\n";
         }
-        return ss.str();
+        return stream.str();
     }
 
 private:
-    struct EdgeTarget { std::string child_id; float weight; };
-    std::unordered_map<std::string, EvidenceNode> nodes_;
-    std::unordered_map<std::string, std::vector<EdgeTarget>> edges_;
+    struct EvidenceLink {
+        std::string child_id;
+        float weight;
+    };
+    std::unordered_map<std::string, EvidenceRecord> records_;
+    std::unordered_map<std::string, std::vector<EvidenceLink>> links_;
 };
 
 // ============================================================================
@@ -163,7 +178,7 @@ class EvidenceFusionEngine {
 public:
     EvidenceFusionEngine() : alpha_(-2.4f), beta_(0.35f) {}
 
-    float calculateTamperCertainty(float coherence, float hfAnomaly, float sensitivity) const noexcept {
+    float calculateTamperScore(float coherence, float hfAnomaly, float sensitivity) const noexcept {
         float score = ((1.0f - coherence) * 1.75f) + (hfAnomaly * sensitivity * 2.25f);
         double logit = (static_cast<double>(score) * alpha_) + beta_;
         return static_cast<float>(1.0 / (1.0 + std::exp(-logit)));
@@ -253,7 +268,7 @@ public:
 
         pipeline_ = std::make_unique<SharedFeaturePipeline>(sample_rate_);
         fusion_engine_ = std::make_unique<EvidenceFusionEngine>();
-        evidence_graph_ = std::make_unique<EvidenceGraph>();
+        evidence_accumulator_ = std::make_unique<EvidenceAccumulator>();
 
         sensitivity_ = 0.5f;
         fusion_threshold_ = 0.65f;
@@ -442,9 +457,9 @@ private:
                 frameResult.high_freq_anomaly,
                 sensitivity_);
 
-            if (probability > fusion_threshold_ || frameResult.splice_flag) {
+            if (score > fusion_threshold_ || frameResult.splice_flag) {
                 tamper_alert_state_ = 1.0f;
-                const RealtimeEvidenceEvent event{probability, event_sequence_++};
+                const RealtimeEvidenceEvent event{score, event_sequence_++};
                 if (!evidence_queue_.push(event)) {
                     dropped_evidence_events_.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -467,7 +482,7 @@ private:
             const std::string nodeId =
                 "realtime_dsp_node_" + std::to_string(event.sequence);
             evidence_graph_->addNode(
-                nodeId, event.probability,
+                nodeId, event.score,
                 "Discontinuity event transferred from the real-time audio queue.");
             evidence_graph_->addEdge("root_provenance", nodeId, 0.85f);
         }
@@ -480,7 +495,7 @@ private:
 
     std::unique_ptr<SharedFeaturePipeline> pipeline_;
     std::unique_ptr<EvidenceFusionEngine> fusion_engine_;
-    std::unique_ptr<EvidenceGraph> evidence_graph_;
+    std::unique_ptr<EvidenceAccumulator> evidence_graph_;
     RealtimeEvidenceQueue evidence_queue_{};
     std::thread evidence_worker_{};
     std::atomic<bool> worker_stop_{true};
