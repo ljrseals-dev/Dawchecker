@@ -19,7 +19,7 @@ ENFAnalyzer::ENFAnalyzer(double sampleRate)
 
 void ENFAnalyzer::prepare(double sampleRate)
 {
-    sampleRate_ = sampleRate > 0.0 ? sampleRate : 48000.0;
+    sampleRate_ = std::isfinite(sampleRate) && sampleRate > 0.0 ? sampleRate : 48000.0;
     for (std::size_t i = 0; i < bins_.size(); ++i)
     {
         auto& bin = bins_[i];
