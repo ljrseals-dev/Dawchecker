@@ -135,7 +135,7 @@ Run from the repository checkout:
 
 ```bash
 bash tools/server-protection/spp-discover.sh
-printf 'exit=%s\\n' "$?"
+printf 'exit=%s\n' "$?"
 ```
 
 Default execution writes only to stdout/stderr. It does not create a snapshot,
@@ -143,7 +143,7 @@ write to the journal, or modify host configuration. Optional persistence is
 explicit:
 
 ```bash
-sudo SPP_SNAPSHOT_DIR=/var/tmp/spp-discovery \\
+sudo SPP_SNAPSHOT_DIR=/var/tmp/spp-discovery \
   bash tools/server-protection/spp-discover.sh
 ```
 
