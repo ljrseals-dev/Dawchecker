@@ -224,7 +224,7 @@ Single-component Steinberg VST3 effect (`SingleComponentEffect`):
 
 - Shared fixed-storage feature pipeline (512-sample frame, 128-sample hop, bounded 16,384-sample ring)
 - Preallocated DFT working buffers; no heap allocation in the pipeline write/process methods
-- Platt-scaled fusion for tamper certainty
+- Logistic mapping to a bounded heuristic score; not a calibrated probability or posterior
 - Bounded SPSC event queue; evidence-graph allocations are moved to a non-audio worker
 - Mono pass-through, stereo processing, and safe fallback for mismatched or null channel buffers
 - Persistent bounded 80 Hz phase accumulator; phase advances independently of tone audibility
@@ -469,7 +469,7 @@ Treat automated scores as **decision support**. Preserve originals; export only 
 | **CSF** | ConfigServer Security & Firewall |
 | **ipset** | Kernel set-based matching used by CSF for large lists |
 | **LFD** | Login Failure Daemon (CSF companion) |
-| **Platt scaling** | Logistic calibration mapping raw scores to probabilities (VST3 fusion path) |
+| **Logistic score mapping** | Heuristic mapping of extracted features into a bounded score; not validated calibration or posterior probability |
 | **Neutralizer** | Optional DSP stage that attenuates a detected class of artifact |
 | **Hermetic DSP** | Analysis path minimizing external binary dependencies |
 
