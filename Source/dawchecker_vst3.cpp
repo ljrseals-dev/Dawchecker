@@ -26,6 +26,7 @@
 
 // VST3 SDK Core Structural Includes
 #include "public.sdk/source/vst/vstsinglecomponenteffect.h"
+#include "public.sdk/source/main/pluginfactory.h"   // defines DEF_CLASS2/END_FACTORY/gPluginFactory
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/base/ustring.h"
@@ -237,6 +238,8 @@ private:
     double sample_rate_;
     size_t fft_size_;
     size_t hop_size_;
+    size_t write_pos_;
+    size_t read_pos_;
     std::vector<float> input_buffer_;
     std::vector<float> fft_window_;
     std::vector<float> prev_phases_;
@@ -321,9 +324,13 @@ public:
 
 class DawCheckerProcessor : public SingleComponentEffect {
 public:
-    DawCheckerProcessor() {
-        this->setControllerClass(kDawCheckerMonolithUID);
-    }
+    DawCheckerProcessor() = default;
+    // Note: setControllerClass() doesn't exist on SingleComponentEffect --
+    // that method is for the split Component/EditController pattern where
+    // processor and controller are two separate classes with two UIDs.
+    // SingleComponentEffect deliberately merges both into one class using
+    // a single class ID (registered once, below, in the factory), so there
+    // is no separate controller class to point to.
 
     static FUnknown* createInstance(void*) {
         return (IAudioProcessor*)new DawCheckerProcessor();
@@ -467,8 +474,8 @@ BEGIN_FACTORY_DEF("TheRealla Audio Forensic Labs",
                PClassInfo::kManyInstances,
                kVstAudioEffectClass,
                "DawChecker Secure Monolith Ultimate",
-               Vst::kDistortion,
-               "Vst3",
+               Vst::kDistributable,          // classFlags (int) -- "kDistortion" was a fabricated constant here
+               Vst::PlugType::kFxAnalyzer,   // subCategories (string) -- "Fx|Analyzer"
                "3.0.0",
                kVstVersionString,
                DawCheckerSecureUltimate::DawCheckerProcessor::createInstance)
