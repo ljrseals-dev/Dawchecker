@@ -34,8 +34,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wall -Wextra -Wpedantic
         -Wconversion -Wshadow -Wsign-conversion
         -Werror=return-type -Werror=uninitialized
+        -Wformat -Werror=format-security
         -fstack-protector-strong
     )
+
+    if(UNIX AND NOT APPLE)
+        add_compile_options(-fPIE)
+    endif()
 
     # These require recent GCC/Clang; guard so older toolchains still build.
     include(CheckCXXCompilerFlag)
@@ -55,8 +60,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 
     # Release-specific hardening
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -DNDEBUG")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-        "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -pie -Wl,-z,relro,-z,now")
+    if(UNIX AND NOT APPLE)
+        set(CMAKE_EXE_LINKER_FLAGS_RELEASE
+            "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack")
+    endif()
 
     # Debug: sanitizers (optional, useful during development)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g3")
@@ -66,6 +73,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 elseif(MSVC)
     add_compile_options(/W4 /WX /GS /sdl /permissive- /Zc:__cplusplus)
     add_link_options(/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF)
+endif()
+
+# Optional development-only sanitizers. Keep disabled for release builds.
+option(DAWCHECKER_ENABLE_SANITIZERS
+       "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+if(DAWCHECKER_ENABLE_SANITIZERS)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address,undefined)
+    else()
+        message(FATAL_ERROR "DAWCHECKER_ENABLE_SANITIZERS requires GCC or Clang")
+    endif()
 endif()
 
 # ============================================================================
