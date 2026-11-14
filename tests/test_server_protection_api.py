@@ -74,6 +74,16 @@ class ServerProtectionApiSecurityTests(unittest.TestCase):
                 self.assertEqual(status, 403)
                 self.assertFalse(payload["ok"])
 
+    def test_ipv6_loopback_origin_is_rejected_for_ipv4_only_listener(self):
+        # The test server binds only 127.0.0.1 and its explicit allowlist
+        # contains only that IPv4 origin. IPv6 loopback is not enabled here.
+        status, payload = self.request(
+            "/api/unblock", origin="http://[::1]:8080",
+            body={"ip": "192.0.2.1"},
+        )
+        self.assertEqual(status, 403)
+        self.assertFalse(payload["ok"])
+
     def test_host_header_does_not_expand_origin_allowlist(self):
         status, payload = self.request(
             "/api/unblock", origin="https://attacker.invalid",
