@@ -36,22 +36,30 @@ detect_os() {
 }
 
 install_pkgs() {
-  log "Installing packages..."
+  log "Installing required packages..."
   case $OS in
     ubuntu|debian)
       apt-get update -qq
       DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        curl wget perl ipset python3 \
-        clamav clamav-daemon rkhunter 2>/dev/null || true
+        curl wget perl ipset python3
+      if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+          clamav clamav-daemon rkhunter; then
+        warn "One or more optional scanner packages could not be installed; their API actions will report unavailable tools."
+      fi
       ;;
     centos|rhel|rocky|almalinux|fedora)
-      yum install -y curl wget perl ipset python3 clamav rkhunter 2>/dev/null || true
+      local package_manager="yum"
+      if command -v dnf >/dev/null 2>&1; then package_manager="dnf"; fi
+      "$package_manager" install -y curl wget perl ipset python3
+      if ! "$package_manager" install -y clamav rkhunter; then
+        warn "One or more optional scanner packages could not be installed; their API actions will report unavailable tools."
+      fi
       ;;
     *)
       warn "Unknown OS — install curl wget perl ipset python3 manually"
       ;;
   esac
-}
+
 
 install_csf() {
   if command -v csf >/dev/null 2>&1; then
