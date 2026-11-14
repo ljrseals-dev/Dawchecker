@@ -68,7 +68,7 @@ The VST3 source files are:
 
 They contain the processor implementation, the evidence worker, channel-layout handling, and the optional 80 Hz tracking tone. These source changes have **not** been compiled against the Steinberg SDK in CI.
 
-Before treating the VST3 integration as verified, add an SDK-backed CMake consumer target that includes `src/`, links `dawchecker_crypto` and `OpenSSL::Crypto`, and builds against a pinned/available Steinberg VST3 SDK. Until that exists and passes CI, the VST3 integration remains a manual release blocker.
+Before treating the VST3 integration as verified, add an SDK-backed CMake consumer target that includes `src/`, links `dawchecker_core` and the appropriate Steinberg VST3 SDK targets, and builds against a pinned/available Steinberg VST3 SDK. Until that exists and passes CI, the VST3 integration remains a manual release blocker.
 
 ## Parameter mapping
 
