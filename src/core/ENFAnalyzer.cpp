@@ -74,7 +74,7 @@ DetectorResult ENFAnalyzer::process(double liveSample, double referenceSample) n
     if (smoothedPower_ > threshold * 2.0)
     {
         result.status = DetectorStatus::Alert;
-        result.label  = "ENF signature locked near " + std::to_string(static_cast<int>(dominant)) + " Hz";
+        result.label  = "ENF signature detected";
     }
     else if (smoothedPower_ > threshold)
     {

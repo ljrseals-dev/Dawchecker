@@ -3,6 +3,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <sstream>
 
 #if defined(DAWCHECKER_PLATFORM_WINDOWS)
     #include <windows.h>
@@ -31,8 +32,11 @@ bool detectDebuggerPresent()
     {
         if (line.rfind("TracerPid:", 0) == 0)
         {
-            const auto pid = line.substr(10);
-            return std::stol(pid) != 0;
+            // Parse defensively: malformed procfs content must not throw
+            // through the startup self-check path.
+            std::istringstream fields(line.substr(10));
+            long pid = 0;
+            return (fields >> pid) && pid != 0;
         }
     }
     return false;
@@ -165,13 +169,21 @@ std::optional<std::size_t> checkedAdd(std::size_t a, std::size_t b) noexcept
 
 bool isSafeExportPath(const std::string& path)
 {
-    if (path.empty())
+    if (path.empty() || path.find('\0') != std::string::npos)
         return false;
-    if (path.find("..") != std::string::npos)
-        return false;
-    // Reject NUL-embedded strings (possible truncation-vs-length mismatch attack).
-    if (path.find('\0') != std::string::npos)
-        return false;
+
+    // Reject parent-directory components for both POSIX and Windows path
+    // separators without rejecting harmless filenames such as "take..wav".
+    std::size_t componentStart = 0;
+    for (std::size_t i = 0; i <= path.size(); ++i)
+    {
+        if (i == path.size() || path[i] == '/' || path[i] == '\\')
+        {
+            if (path.compare(componentStart, i - componentStart, "..") == 0)
+                return false;
+            componentStart = i + 1;
+        }
+    }
     return true;
 }
 

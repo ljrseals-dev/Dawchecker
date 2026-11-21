@@ -29,12 +29,13 @@ endif()
 # HARDENED BUILD FLAGS
 # ============================================================================
 # Applied globally so both the core library and the GUI binary inherit them.
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
     add_compile_options(
         -Wall -Wextra -Wpedantic
         -Wconversion -Wshadow -Wsign-conversion
         -Werror=return-type -Werror=uninitialized
-        -fstack-protector-strong
+        -Wformat -Werror=format-security
+        -fstack-protector-strong -fPIE
     )
 
     # These require recent GCC/Clang; guard so older toolchains still build.
@@ -53,10 +54,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options(-D_FORTIFY_SOURCE=2)
     endif()
 
-    # Release-specific hardening
+    # ELF-specific linker hardening; do not pass GNU ld flags to Apple ld.
+    if(UNIX AND NOT APPLE)
+        add_link_options(-pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+    endif()
+
+    # Release-specific optimization.
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -DNDEBUG")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-        "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -pie -Wl,-z,relro,-z,now")
 
     # Debug: sanitizers (optional, useful during development)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g3")
@@ -64,6 +68,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address,undefined")
     # set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -fsanitize=address,undefined")
 elseif(MSVC)
+    # M_PI is used by the DSP implementation; MSVC exposes it when this macro
+    # is defined before the standard math headers are included.
+    add_compile_definitions(_USE_MATH_DEFINES)
     add_compile_options(/W4 /WX /GS /sdl /permissive- /Zc:__cplusplus)
     add_link_options(/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF)
 endif()
