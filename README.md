@@ -26,7 +26,7 @@ The VST3 component is implemented against the **Steinberg VST3 SDK**. Its source
 
 The plugin source is in `Source/dawchecker_vst3.cpp`; `latest/dawchecker_vst3.cpp` is the corresponding maintained snapshot. The Steinberg SDK is an external build dependency and is not vendored in this repository.
 
-**Build-system distinction:** the top-level `CMakeLists.txt` configures the standalone application/core and `engine_tests`. It does not itself declare the VST3 plugin target. Build the VST3 component through the SDK-aware plugin build configuration used for the plugin deliverable, with the Steinberg SDK available. Do not interpret a successful standalone CMake build as a VST3 build, or vice versa.
+**Build-system limitation:** the top-level `CMakeLists.txt` configures only the standalone application/core and `engine_tests`. This repository currently contains no VST3 CMake target or checked-in SDK-aware plugin build configuration. The VST3 source is therefore not built or validated by the repository's standalone build. A separate, reproducible SDK-backed plugin build definition and host-load test are still required before the VST3 component can be considered a deliverable. Do not interpret a successful standalone CMake build as a VST3 build.
 
 ## Audio analysis
 
