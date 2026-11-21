@@ -102,8 +102,10 @@ bool Application::initWindow()
 #endif
 
     window_ = glfwCreateWindow(kWindowWidth, kWindowHeight, "DawChecker Secure", nullptr, nullptr);
-    if (window_ == nullptr)
+    if (window_ == nullptr) {
+        glfwTerminate();
         return false;
+    }
 
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(1);
@@ -115,8 +117,21 @@ bool Application::initWindow()
 
     applyTheme();
 
-    ImGui_ImplGlfw_InitForOpenGL(window_, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    if (!ImGui_ImplGlfw_InitForOpenGL(window_, true)) {
+        ImGui::DestroyContext();
+        glfwDestroyWindow(window_);
+        window_ = nullptr;
+        glfwTerminate();
+        return false;
+    }
+    if (!ImGui_ImplOpenGL3_Init("#version 330")) {
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+        glfwDestroyWindow(window_);
+        window_ = nullptr;
+        glfwTerminate();
+        return false;
+    }
 
     return true;
 }
