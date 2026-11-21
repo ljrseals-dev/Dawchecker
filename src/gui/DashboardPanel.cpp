@@ -44,7 +44,7 @@ void drawDetectorRow(const char* name, const dsp::DetectorResult& result)
     ImGui::TextUnformatted(buf);
     ImGui::SameLine(280);
     ImGui::TextColored(ImVec4(p.textSecondary[0], p.textSecondary[1], p.textSecondary[2], p.textSecondary[3]),
-                        "%s", result.label.c_str());
+                        "%s", result.label);
 }
 
 } // namespace
