@@ -1,13 +1,12 @@
 #pragma once
-#include <deque>
+#include <array>
+#include <cstddef>
 #include "DetectorTypes.h"
 
 namespace dawchecker::dsp {
 
 // Detects embedded watermark artifacts by tracking the residual between a
-// reference (pre-processing / sidechain) signal and the live output —
-// stable, low-magnitude, structured deltas are consistent with watermark
-// payloads rather than ordinary processing or noise.
+// reference (pre-processing / sidechain) signal and the live output.
 class WatermarkDetector
 {
 public:
@@ -23,7 +22,11 @@ private:
     double sensitivity_ = 5.0;
     double prevRef_ = 0.0, prevLive_ = 0.0, prevDelta_ = 0.0;
     double smoothedStego_ = 0.0;
-    std::deque<double> deltaHistory_; // short ring buffer for structure analysis
+    // Fixed-capacity history: process() is called from the audio callback and
+    // must not allocate or resize a container while processing samples.
+    std::array<double, 256> deltaHistory_{};
+    std::size_t historyWrite_ = 0;
+    std::size_t historyCount_ = 0;
     static constexpr std::size_t kHistoryLen = 256;
 };
 

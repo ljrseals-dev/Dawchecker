@@ -48,7 +48,7 @@ DetectorResult UltrasonicScanner::process(double liveSample) noexcept
     if (smoothed_ > 0.0009)
     {
         result.status = DetectorStatus::Alert;
-        result.label  = "Ultrasonic beacon near " + std::to_string(static_cast<int>(dominant)) + " Hz";
+        result.label  = "Ultrasonic beacon detected";
     }
     else if (smoothed_ > 0.00025)
     {

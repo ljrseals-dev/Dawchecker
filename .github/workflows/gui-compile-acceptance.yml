@@ -1,0 +1,35 @@
+name: GUI compile acceptance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gui-build:
+    name: Build GUI and core with pinned ImGui
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install GUI and crypto dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libglfw3-dev libssl-dev
+
+      - name: Fetch pinned ImGui dependency
+        run: |
+          git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git third_party/imgui
+
+      - name: Configure full GUI build
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDAWCHECKER_REQUIRE_CRYPTO=ON -DIMGUI_DIR="$PWD/third_party/imgui"
+
+      - name: Build all enabled targets
+        run: cmake --build build --parallel 2
+
+      - name: Run engine and SHA-256 tests
+        run: ctest --test-dir build --output-on-failure

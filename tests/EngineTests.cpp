@@ -75,6 +75,24 @@ int main()
     {
         check(!security::isSafeExportPath("../../etc/passwd"), "Path traversal is rejected");
         check(security::isSafeExportPath("output/cleaned.wav"), "Ordinary relative path is accepted");
+        check(security::isSafeExportPath("output/take..wav"), "Double dots inside a filename are accepted");
+        check(!security::isSafeExportPath("output\\..\\secret.wav"), "Windows parent-directory traversal is rejected");
+    }
+
+    // --- Watermark history: fixed-capacity processing remains stable across wraps.
+    {
+        dsp::WatermarkDetector detector(48000.0, 5.0);
+        bool finite = true;
+        for (int i = 0; i < 4096; ++i)
+        {
+            const double sample = 0.1 * std::sin(2.0 * M_PI * 440.0 *
+                                                  static_cast<double>(i) / 48000.0);
+            const auto result = detector.process(sample, sample * 0.999);
+            finite = finite && std::isfinite(result.confidence);
+        }
+        check(finite, "Watermark detector remains finite after repeated history-buffer wraps");
+        detector.prepare(48000.0, 5.0);
+        check(detector.lastDelta() == 0.0, "Watermark detector prepare resets prior-sample state");
     }
 
     // --- Codec scanner: the known-codec database matches expected entries.

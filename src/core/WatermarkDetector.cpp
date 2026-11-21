@@ -1,7 +1,6 @@
 #include "WatermarkDetector.h"
-#include <cmath>
 #include <algorithm>
-#include <numeric>
+#include <cmath>
 
 namespace dawchecker::dsp {
 
@@ -16,46 +15,47 @@ void WatermarkDetector::prepare(double sampleRate, double sensitivity)
     sensitivity_ = std::clamp(sensitivity, 1.0, 100.0);
     prevRef_ = prevLive_ = prevDelta_ = 0.0;
     smoothedStego_ = 0.0;
-    deltaHistory_.clear();
+    deltaHistory_.fill(0.0);
+    historyWrite_ = 0;
+    historyCount_ = 0;
 }
 
 DetectorResult WatermarkDetector::process(double liveSample, double referenceSample) noexcept
 {
     const double delta = liveSample - referenceSample;
 
-    // Phase-deviation term: watermarking schemes that phase-modulate a
-    // reference carrier show up as a nonzero cross term here even when
-    // magnitude differences are negligible.
     const double phaseDeviation = std::abs(liveSample * prevRef_ - referenceSample * prevLive_);
     prevRef_  = referenceSample;
     prevLive_ = liveSample;
 
-    // Structured-delta ("stego") term: a genuine watermark payload tends to
-    // change the delta signal in small, consistent steps rather than the
-    // larger, less-regular jumps typical of ordinary program material.
     const bool structuredStep = std::abs(delta - prevDelta_) > (0.000001 * sensitivity_);
     prevDelta_ = delta;
 
-    deltaHistory_.push_back(delta);
-    if (deltaHistory_.size() > kHistoryLen)
-        deltaHistory_.pop_front();
+    // Overwrite the oldest sample in-place. No deque growth/pop allocation
+    // occurs on the real-time audio thread.
+    deltaHistory_[historyWrite_] = delta;
+    historyWrite_ = (historyWrite_ + 1) % kHistoryLen;
+    if (historyCount_ < kHistoryLen)
+        ++historyCount_;
 
     double deltaMean = 0.0;
-    if (!deltaHistory_.empty())
-        deltaMean = std::accumulate(deltaHistory_.begin(), deltaHistory_.end(), 0.0) / static_cast<double>(deltaHistory_.size());
+    for (std::size_t i = 0; i < historyCount_; ++i)
+        deltaMean += deltaHistory_[i];
+    if (historyCount_ != 0)
+        deltaMean /= static_cast<double>(historyCount_);
 
     double deltaVariance = 0.0;
-    for (double d : deltaHistory_)
-        deltaVariance += (d - deltaMean) * (d - deltaMean);
-    if (!deltaHistory_.empty())
-        deltaVariance /= static_cast<double>(deltaHistory_.size());
+    for (std::size_t i = 0; i < historyCount_; ++i)
+    {
+        const double difference = deltaHistory_[i] - deltaMean;
+        deltaVariance += difference * difference;
+    }
+    if (historyCount_ != 0)
+        deltaVariance /= static_cast<double>(historyCount_);
 
-    // Low variance + nonzero mean delta over a long window is the signature
-    // of a persistent, low-amplitude additive watermark rather than transient
-    // processing artifacts (which tend to have high variance).
     const double persistentBias = std::abs(deltaMean);
     const double raw = phaseDeviation * 8.0 + (structuredStep ? 0.02 : 0.0) +
-                        (deltaVariance < 1e-6 ? persistentBias * 40.0 : 0.0);
+                       (deltaVariance < 1e-6 ? persistentBias * 40.0 : 0.0);
 
     smoothedStego_ += (raw - smoothedStego_) * 0.004;
 
