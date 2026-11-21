@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <string>
 
 namespace dawchecker::dsp {
 
@@ -8,13 +7,14 @@ enum class DetectorStatus : std::uint8_t { Idle, Active, Alert };
 
 struct DetectorResult
 {
-    DetectorStatus status   = DetectorStatus::Idle;
-    double         confidence = 0.0; // 0..100
-    double         locationHz = 0.0; // dominant frequency/region of the finding, if applicable
-    std::string    label;            // human-readable summary for the GUI panel
+    DetectorStatus status = DetectorStatus::Idle;
+    double confidence = 0.0; // 0..100
+    double locationHz = 0.0;
+    // Non-owning pointer to a static string literal. Detector process() runs
+    // on the audio thread, so result labels must not allocate or own storage.
+    const char* label = "";
 };
 
-// A single biquad notch/lowpass section, used by all neutralizers.
 struct BiquadState
 {
     double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
