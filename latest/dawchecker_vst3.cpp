@@ -347,16 +347,17 @@ public:
 
     tresult PLUGIN_API setBusArrangements(SpeakerArrangement* ins, int32 numIns, 
                                           SpeakerArrangement* outs, int32 numOuts) override {
-        if (numIns == 1 && numOuts == 1 && ins[0] == SpeakerArr::kStereo && outs[0] == SpeakerArr::kStereo) {
+        if (ins != nullptr && outs != nullptr && numIns == 1 && numOuts == 1 &&
+            ins[0] == SpeakerArr::kStereo && outs[0] == SpeakerArr::kStereo) {
             return SingleComponentEffect::setBusArrangements(ins, numIns, outs, numOuts);
         }
         return kResultFalse;
     }
 
     tresult PLUGIN_API setupProcessing(ProcessSetup& setup) override {
-        if (setup.sampleRate > 0) {
-            pipeline_ = std::make_unique<SharedFeaturePipeline>(setup.sampleRate);
-        }
+        if (!std::isfinite(setup.sampleRate) || setup.sampleRate <= 0.0)
+            return kResultFalse;
+        pipeline_ = std::make_unique<SharedFeaturePipeline>(setup.sampleRate);
         return SingleComponentEffect::setupProcessing(setup);
     }
 
