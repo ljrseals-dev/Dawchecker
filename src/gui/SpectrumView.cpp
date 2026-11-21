@@ -60,7 +60,8 @@ void SpectrumView::render(double markerHzWatermark, double markerHzEnf, double m
 
     std::vector<std::complex<float>> buffer(kFftSize);
     {
-        const std::size_t start = writeIndex_.load(std::memory_order_acquire) % kFftSize;
+        const std::size_t written = writeIndex_.load(std::memory_order_acquire);
+        const std::size_t start = written >= kFftSize ? written % kFftSize : 0;
         for (std::size_t i = 0; i < kFftSize; ++i)
         {
             // Hann window to reduce spectral leakage in the display.
