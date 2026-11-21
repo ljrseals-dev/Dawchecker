@@ -382,68 +382,70 @@ public:
     }
 
     tresult PLUGIN_API process(ProcessData& data) override {
+        if (data.numSamples < 0)
+            return kResultFalse;
+
         if (data.inputParameterChanges) {
-            int32 totalParamChanges = data.inputParameterChanges->getParameterCount();
+            const int32 totalParamChanges = data.inputParameterChanges->getParameterCount();
             for (int32 i = 0; i < totalParamChanges; ++i) {
                 if (auto* queue = data.inputParameterChanges->getParameterData(i)) {
-                    int32 points = queue->getPointCount();
-                    ParamValue val;
-                    int32 sampleOffset;
-                    if (queue->getPoint(points - 1, sampleOffset, val) == kResultTrue) {
+                    const int32 points = queue->getPointCount();
+                    ParamValue val = 0.0;
+                    int32 sampleOffset = 0;
+                    if (points > 0 && queue->getPoint(points - 1, sampleOffset, val) == kResultTrue &&
+                        std::isfinite(val)) {
+                        const float normalized = static_cast<float>(std::clamp(val, 0.0, 1.0));
                         switch (queue->getParameterId()) {
-                            case kParamSensitivity:     sensitivity_ = static_cast<float>(val); break;
-                            case kParamFusionThreshold: fusion_threshold_ = static_cast<float>(val); break;
-                            case kParamAntiForensicGate: anti_forensic_gate_ = static_cast<float>(val); break;
+                            case kParamSensitivity: sensitivity_ = normalized; break;
+                            case kParamFusionThreshold: fusion_threshold_ = normalized; break;
+                            case kParamAntiForensicGate: anti_forensic_gate_ = normalized; break;
+                            default: break;
                         }
                     }
                 }
             }
         }
 
-        if (data.numInputs == 0 || data.numOutputs == 0 || data.numSamples == 0) {
+        if (data.numSamples == 0)
             return kResultOk;
-        }
+        if (data.numInputs < 1 || data.numOutputs < 1 ||
+            data.inputs == nullptr || data.outputs == nullptr ||
+            data.inputs[0].numChannels < 2 || data.outputs[0].numChannels < 2 ||
+            data.inputs[0].channelBuffers32 == nullptr ||
+            data.outputs[0].channelBuffers32 == nullptr ||
+            data.inputs[0].channelBuffers32[0] == nullptr ||
+            data.inputs[0].channelBuffers32[1] == nullptr ||
+            data.outputs[0].channelBuffers32[0] == nullptr ||
+            data.outputs[0].channelBuffers32[1] == nullptr ||
+            pipeline_ == nullptr || fusion_engine_ == nullptr)
+            return kResultFalse;
 
-        float* inL = data.inputs[0].channelBuffers32[0];
+        const float* inL = data.inputs[0].channelBuffers32[0];
+        const float* inR = data.inputs[0].channelBuffers32[1];
         float* outL = data.outputs[0].channelBuffers32[0];
         float* outR = data.outputs[0].channelBuffers32[1];
 
+        // Analyze the left channel without changing the source audio. Do not
+        // inject a tracking tone into the evidentiary signal.
         pipeline_->writeSamples(inL, data.numSamples);
-
         while (pipeline_->isFrameAvailable()) {
-            FrameAnalysisResult frame_res = pipeline_->processNextFrame(sensitivity_, anti_forensic_gate_);
-            
-            float probability = fusion_engine_->calculateTamperCertainty(
-                frame_res.phase_coherence, 
-                frame_res.high_freq_anomaly, 
-                sensitivity_
-            );
+            const FrameAnalysisResult frame_res =
+                pipeline_->processNextFrame(sensitivity_, anti_forensic_gate_);
+            const float probability = fusion_engine_->calculateTamperCertainty(
+                frame_res.phase_coherence, frame_res.high_freq_anomaly, sensitivity_);
 
             if (probability > fusion_threshold_ || frame_res.splice_flag) {
                 tamper_alert_state_ = 1.0f;
-                evidence_graph_->addNode("realtime_dsp_node", probability, "Discontinuity flag registered inside real-time STFT signal block window loop.");
-                evidence_graph_->addEdge("root_provenance", "realtime_dsp_node", 0.85f);
+                // EvidenceGraph uses allocating containers and must not be
+                // mutated from the real-time audio callback.
             } else {
-                tamper_alert_state_ *= 0.93f; // Smooth exponential stabilization decay
+                tamper_alert_state_ *= 0.93f;
             }
         }
 
-        // Sub-harmonic signaling trace injection loop
         for (int32 i = 0; i < data.numSamples; ++i) {
-            float clean_sample = inL[i];
-            float tracking_tone = (tamper_alert_state_ > 0.15f) ? 
-                (0.015f * std::sin(2.0f * M_PI * i * 80.0f / 44100.0f)) : 0.0f;
-
-            outL[i] = clean_sample + tracking_tone;
-            outR[i] = clean_sample - tracking_tone;
-        }
-
-        if (data.outputParameterChanges) {
-            int32 trackingIdx = 0;
-            if (auto* queue = data.outputParameterChanges->addParameterData(kParamFusionThreshold, trackingIdx)) {
-                int32 pointIdx = 0;
-                queue->addPoint(0, tamper_alert_state_, pointIdx);
-            }
+            outL[i] = inL[i];
+            outR[i] = inR[i];
         }
 
         return kResultOk;
