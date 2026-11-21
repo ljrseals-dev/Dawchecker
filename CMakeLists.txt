@@ -29,7 +29,7 @@ endif()
 # HARDENED BUILD FLAGS
 # ============================================================================
 # Applied globally so both the core library and the GUI binary inherit them.
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
     add_compile_options(
         -Wall -Wextra -Wpedantic
         -Wconversion -Wshadow -Wsign-conversion
