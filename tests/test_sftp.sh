@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Lewis James Seals Jr.
+# SPDX-License-Identifier: MIT
+# Author: Lewis James Seals Jr.
+# Repository: https://github.com/ljrseals-dev/StackAlign
+# tests/test_sftp.sh
+set -u
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/sshd_config.d"; : > "$T/calls"; : > "$T/users"
+export CALLS="$T/calls" USERS="$T/users" GROUPF="$T/group" PATH="$T/bin:$PATH"
+fail=0
+check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1 (got '$2' want '$3')"; fail=1; fi; }
+mkfake() { printf "%s\n" "#!/usr/bin/env bash" "$2" > "$T/bin/$1"; chmod +x "$T/bin/$1"; }
+
+mkfake id 'u="${@: -1}"; l="$(grep -E "^$u(:|$)" "$USERS" | head -1)"; [ -n "$l" ] || exit 1; if [ "$1" = -nG ]; then echo -n "$u wheel"; case "$l" in *:sftp) echo -n " sftponly" ;; esac; echo; fi'
+mkfake getent 'if [ "$1" = group ]; then [ -f "$GROUPF" ] || exit 2; echo "sftponly:x:1001:alice,carol"; fi'
+mkfake groupadd 'echo "groupadd $*" >> "$CALLS"; touch "$GROUPF"'
+mkfake useradd 'echo "useradd $*" >> "$CALLS"; echo "${@: -1}:sftp" >> "$USERS"'
+mkfake userdel 'echo "userdel $*" >> "$CALLS"; grep -v "^${@: -1}:" "$USERS" > "$USERS.n"; mv "$USERS.n" "$USERS"'
+mkfake openssl 'echo "openssl $*" >> "$CALLS"; case "$1" in rand) echo randomsecret ;; passwd) [ "$2" = -6 ] && [ "$3" = -stdin ] || exit 1; input=$(cat); [ "$input" = randomsecret ] || exit 1; echo fakehash ;; *) exit 1 ;; esac'
+mkfake chpasswd 'data=$(cat); echo "chpasswd $* $data" >> "$CALLS"'
+mkfake install 'echo "install $*" >> "$CALLS"; for a in "$@"; do :; done; for a in "$@"; do case "$a" in -*|root|sftponly) ;; *) [ "$a" = "--" ] || mkdir -p "$a" ;; esac; done'
+mkfake chown 'echo "chown $*" >> "$CALLS"'
+mkfake sshd 'echo "sshd $*" >> "$CALLS"; exit "${FAKE_SSHD_RC:-0}"'
+mkfake systemctl 'echo "systemctl $*" >> "$CALLS"; [ "$1" = reload ] && exit "${FAKE_RELOAD_RC:-0}"; exit 0'
+
+export SA_SFTP_BASE="$T/sftp" SA_SFTP_KEYDIR="$T/keys" SA_SFTP_DROPIN="$T/sshd_config.d/50-stackalign-sftp.conf"
+. "$ROOT/lib/sftp.sh"
+# Production policy rejects fixture roots and non-root mutation callers.
+_sa_sftp_path_policy >/dev/null 2>&1; path_policy_rc=$?
+[ "$path_policy_rc" -ne 0 ] && check "reject paths outside production SFTP roots" 0 0 || check "reject paths outside production SFTP roots" 1 0
+if [ "$EUID" -ne 0 ]; then
+  _sa_sftp_require_root >/dev/null 2>&1; root_rc=$?
+  [ "$root_rc" -ne 0 ] && check "non-root SFTP mutations refused" 0 0 || check "non-root SFTP mutations refused" 1 0
+fi
+# Fixture-only path/root injection; production has no environment bypass.
+_sa_sftp_path_policy() { return 0; }
+_sa_sftp_require_root() { return 0; }
+# Test-only executor routes approved tool IDs to explicit fixture binaries.
+sa_exec() {
+  local tool=$1
+  shift
+  [ "${1-}" = -- ] && shift
+  "$T/bin/$tool" "$@"
+}
+
+
+# sshd_config interpolation must reject directive injection and symlinked paths.
+bad_group=$(printf 'sftponly\\nMatch all')
+bad_base=$(printf '/tmp/sftp\\nMatch all')
+SA_SFTP_GROUP="$bad_group" sa_sftp_render >/dev/null 2>&1; bad_group_rc=$?
+SA_SFTP_BASE="$bad_base" sa_sftp_render >/dev/null 2>&1; bad_base_rc=$?
+SA_SFTP_KEYDIR="$T/keys/../other" sa_sftp_render >/dev/null 2>&1; dot_keydir_rc=$?
+ln -s "$T" "$T/path-link"
+SA_SFTP_BASE="$T/path-link/sftp" sa_sftp_render >/dev/null 2>&1; symlink_base_rc=$?
+check "reject sshd group directive injection" "$bad_group_rc" 64
+check "reject sshd path directive injection" "$bad_base_rc" 64
+check "reject non-canonical sshd path" "$dot_keydir_rc" 64
+check "reject symlinked sshd path component" "$symlink_base_rc" 64
+
+KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyData0123456789abcdefghijk user@host'
+printf '%s\n' "$KEY" > "$T/good.pub"
+ln -s "$T/good.pub" "$T/key-link.pub"
+sa_sftp_add_user alice "$T/key-link.pub" >/dev/null 2>&1; check "symlinked public key rejected" "$?" 64
+printf '%s\n' 'command="rm -rf /" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA x' > "$T/opts.pub"
+printf '%s\n%s\n' "$KEY" "$KEY" > "$T/two.pub"
+printf '%s\n' 'ssh-dss AAAAB3NzaC1kc3MAAACB x' > "$T/dss.pub"
+
+for bad in "root" "Alice" "a b" "../x" "a;b" "" "-rf"; do
+  sa_sftp_add_user "$bad" "$T/good.pub" >/dev/null 2>&1; check "bad user '$bad'" "$?" 64
+done
+for kf in opts two dss; do
+  sa_sftp_add_user eve "$T/$kf.pub" >/dev/null 2>&1; check "bad key ($kf)" "$?" 64
+done
+sa_sftp_add_user eve "$T/missing.pub" >/dev/null 2>&1; check "missing key file" "$?" 64
+mkdir -p "$T/keys/eve"
+: > "$CALLS"
+sa_sftp_add_user eve "$T/good.pub" >/dev/null 2>&1; check "reject directory at authorized-keys target" "$?" 1
+if grep -q useradd "$CALLS"; then rc=0; else rc=1; fi
+check "unsafe key target rejected before account creation" "$rc" 1
+rmdir "$T/keys/eve"
+
+grep -q useradd "$CALLS"; check "no useradd on bad input" "$?" 1
+
+sa_sftp_add_user alice "$T/good.pub" >/dev/null 2>&1; check "add alice ok" "$?" 0
+grep -q "groupadd -- sftponly" "$CALLS"; check "group created when missing" "$?" 0
+grep -q "useradd -g sftponly -M -d $T/sftp/alice -s /sbin/nologin -- alice" "$CALLS"; check "useradd flags (nologin, no home skeleton)" "$?" 0
+grep -q "openssl rand -hex 32" "$CALLS" && grep -q "openssl passwd -6 -stdin" "$CALLS" && ! grep -q "openssl passwd -6 randomsecret" "$CALLS" && grep -q "chpasswd -e alice:fakehash" "$CALLS"; check "password hash uses stdin and secret is absent from argv" "$?" 0
+grep -q "install -d -m 0755 -o root -g root -- $T/sftp $T/keys $T/sftp/alice" "$CALLS"; check "chroot root-owned 0755" "$?" 0
+grep -q "install -d -m 0700 -o alice -g sftponly -- $T/sftp/alice/files" "$CALLS"; check "upload dir owned by user 0700" "$?" 0
+check "key file content" "$(cat "$T/keys/alice")" "$KEY"
+check "key file mode 644" "$(stat -c %a "$T/keys/alice")" 644
+grep -q "chown root:root" "$CALLS"; check "key file root-owned" "$?" 0
+
+: > "$CALLS"; sa_sftp_add_user alice "$T/good.pub" >/dev/null 2>&1; check "re-add rotates key" "$?" 0
+grep -q "useradd" "$CALLS"; check "no second useradd" "$?" 1
+grep -q "groupadd" "$CALLS"; check "group not recreated" "$?" 1
+
+echo "bob" >> "$USERS"
+: > "$CALLS"; sa_sftp_add_user bob "$T/good.pub" >/dev/null 2>&1; check "existing normal account refused" "$?" 1
+if [ -e "$T/keys/bob" ]; then rc=0; else rc=1; fi; check "no key written for refused account" "$rc" 1
+
+sa_sftp_remove_user bob >/dev/null 2>&1; check "remove non-SFTP account refused" "$?" 1
+grep -q userdel "$CALLS"; check "no userdel for bob" "$?" 1
+rm -f "$T/keys/alice"
+ln -s "$T/good.pub" "$T/keys/alice"
+: > "$CALLS"
+sa_sftp_remove_user alice >/dev/null 2>&1; check "refuse symlinked authorized-keys target on removal" "$?" 1
+if grep -q userdel "$CALLS"; then rc=0; else rc=1; fi
+check "unsafe key target rejected before user deletion" "$rc" 1
+rm -f "$T/keys/alice"
+sa_sftp_remove_user alice >/dev/null 2>&1; check "remove sftp user ok" "$?" 0
+grep -q "userdel -- alice" "$CALLS" && ! grep -q -- "userdel -r" "$CALLS"; check "userdel without -r" "$?" 0
+if [ -e "$T/keys/alice" ]; then rc=0; else rc=1; fi; check "key removed" "$rc" 1
+if [ -d "$T/sftp/alice/files" ]; then rc=0; else rc=1; fi; check "data kept" "$rc" 0
+
+r="$(sa_sftp_render)"
+for want in "Match Group sftponly" "ChrootDirectory $T/sftp/%u" "ForceCommand internal-sftp -d /files" "AuthorizedKeysFile $T/keys/%u" "PasswordAuthentication no" "AuthenticationMethods publickey" "PermitTTY no" "AllowTcpForwarding no" "Match all"; do
+  case "$r" in *"$want"*) check "render has: $want" 0 0 ;; *) check "render has: $want" 1 0 ;; esac
+done
+
+: > "$CALLS"; sa_sftp_enable >/dev/null 2>&1; check "enable ok" "$?" 0
+grep -q "Match Group sftponly" "$SA_SFTP_DROPIN"; check "drop-in installed" "$?" 0
+grep -q "^sshd -t" "$CALLS"; check "sshd -t ran" "$?" 0
+grep -q "systemctl reload sshd" "$CALLS"; check "sshd reloaded" "$?" 0
+leftovers=0
+for f in "$T/sshd_config.d"/.sa-sftp*; do
+  [ -e "$f" ] || continue
+  leftovers=$((leftovers + 1))
+done
+check "no temp files left" "$leftovers" 0
+
+printf 'OLD\n' > "$SA_SFTP_DROPIN"; : > "$CALLS"
+FAKE_SSHD_RC=1 sa_sftp_enable >/dev/null 2>&1; check "sshd -t failure => rc 1" "$?" 1
+check "previous drop-in restored" "$(cat "$SA_SFTP_DROPIN")" OLD
+grep -q "reload" "$CALLS"; check "no reload after failed check" "$?" 1
+
+rm -f "$SA_SFTP_DROPIN"; FAKE_SSHD_RC=1 sa_sftp_enable >/dev/null 2>&1
+if [ -e "$SA_SFTP_DROPIN" ]; then rc=0; else rc=1; fi; check "first-time failure removes drop-in" "$rc" 1
+
+printf 'OLD\n' > "$SA_SFTP_DROPIN"; FAKE_RELOAD_RC=1 sa_sftp_enable >/dev/null 2>&1; check "reload failure => rc 1" "$?" 1
+check "reload failure restores previous" "$(cat "$SA_SFTP_DROPIN")" OLD
+
+check "list members" "$(sa_sftp_list | tr '\n' ' ')" "alice carol "
+exit "$fail"
