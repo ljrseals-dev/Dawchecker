@@ -154,101 +154,80 @@ private:
 
 class SharedFeaturePipeline {
 public:
-    explicit SharedFeaturePipeline(double sampleRate) 
-        : sample_rate_(sampleRate), fft_size_(512), hop_size_(128), write_pos_(0), read_pos_(0) {
-        input_buffer_.resize(16384, 0.0f);
-        fft_window_.resize(fft_size_);
-        for (size_t i = 0; i < fft_size_; ++i) {
+    explicit SharedFeaturePipeline(double sampleRate)
+        : sample_rate_(sampleRate), fft_size_(512), hop_size_(128),
+          write_pos_(0), read_pos_(0), available_samples_(0) {
+        for (size_t i = 0; i < fft_size_; ++i)
             fft_window_[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (fft_size_ - 1)));
-        }
-        prev_phases_.resize(fft_size_ / 2 + 1, 0.0f);
         history_coherence_.fill(1.0f);
         history_index_ = 0;
     }
-
     void writeSamples(const float* data, int numSamples) noexcept {
+        if (data == nullptr || numSamples <= 0) return;
         for (int i = 0; i < numSamples; ++i) {
+            if (available_samples_ == input_buffer_.size()) {
+                read_pos_ = (read_pos_ + 1) % input_buffer_.size();
+                --available_samples_;
+            }
             input_buffer_[write_pos_] = data[i];
             write_pos_ = (write_pos_ + 1) % input_buffer_.size();
+            ++available_samples_;
         }
     }
-
-    bool isFrameAvailable() const noexcept {
-        size_t available = (write_pos_ >= read_pos_) ? 
-            (write_pos_ - read_pos_) : (input_buffer_.size() - read_pos_ + write_pos_);
-        return available >= fft_size_;
-    }
-
-    FrameAnalysisResult processNextFrame(float sensitivity, float anomalyGate) {
-        std::vector<float> frame(fft_size_);
+    bool isFrameAvailable() const noexcept { return available_samples_ >= fft_size_; }
+    FrameAnalysisResult processNextFrame(float sensitivity, float anomalyGate) noexcept {
+        std::array<float, 512> frame{};
         size_t temp_read = read_pos_;
         for (size_t i = 0; i < fft_size_; ++i) {
             frame[i] = input_buffer_[temp_read] * fft_window_[i];
             temp_read = (temp_read + 1) % input_buffer_.size();
         }
         read_pos_ = (read_pos_ + hop_size_) % input_buffer_.size();
-
-        size_t bins = fft_size_ / 2 + 1;
-        std::vector<std::complex<float>> spectrum(bins, 0.0f);
-        float hf_energy = 0.0f;
-        float lf_energy = 0.0f;
-        float total_phase_diff = 0.0f;
-
-        // Isolated Fourier Transform processing loop
+        available_samples_ -= hop_size_;
+        const size_t bins = fft_size_ / 2 + 1;
+        float hf_energy = 0.0f, lf_energy = 0.0f, total_phase_diff = 0.0f;
         for (size_t k = 0; k < bins; ++k) {
-            float real_sum = 0.0f;
-            float imag_sum = 0.0f;
-            float angle_factor = -2.0f * M_PI * k / fft_size_;
-            
+            float real_sum = 0.0f, imag_sum = 0.0f;
+            const float factor = -2.0f * M_PI * static_cast<float>(k) / static_cast<float>(fft_size_);
             for (size_t n = 0; n < fft_size_; ++n) {
-                float angle = angle_factor * n;
+                const float angle = factor * static_cast<float>(n);
                 real_sum += frame[n] * std::cos(angle);
                 imag_sum += frame[n] * std::sin(angle);
             }
-            spectrum[k] = std::complex<float>(real_sum, imag_sum);
-            float mag = std::abs(spectrum[k]);
-            float phase = std::arg(spectrum[k]);
-
-            if (k > bins / 2) hf_energy += mag;
-            else lf_energy += mag;
-
-            float phase_deriv = phase - prev_phases_[k];
+            const float mag = std::hypot(real_sum, imag_sum);
+            const float phase = std::atan2(imag_sum, real_sum);
+            if (k > bins / 2) hf_energy += mag; else lf_energy += mag;
+            const float diff = phase - prev_phases_[k];
             prev_phases_[k] = phase;
-            total_phase_diff += std::abs(std::atan2(std::sin(phase_deriv), std::cos(phase_deriv)));
+            total_phase_diff += std::abs(std::atan2(std::sin(diff), std::cos(diff)));
         }
-
-        float norm_coherence = 1.0f - (total_phase_diff / (bins * M_PI));
-        history_coherence_[history_index_] = norm_coherence;
+        const float coherence = 1.0f - total_phase_diff /
+            (static_cast<float>(bins) * static_cast<float>(M_PI));
+        history_coherence_[history_index_] = coherence;
         history_index_ = (history_index_ + 1) % history_coherence_.size();
-
-        float sum_coherence = 0.0f;
-        for (float val : history_coherence_) sum_coherence += val;
-        float mean_coherence = sum_coherence / history_coherence_.size();
-
-        FrameAnalysisResult res;
-        res.phase_coherence = mean_coherence;
-        res.high_freq_anomaly = (lf_energy > 0.0f) ? (hf_energy / lf_energy) : 0.0f;
-        res.noise_floor = lf_energy / bins;
-        res.splice_flag = (res.high_freq_anomaly * sensitivity > anomalyGate) && (res.phase_coherence < 0.50f);
-
-        return res;
+        float sum = 0.0f;
+        for (float value : history_coherence_) sum += value;
+        FrameAnalysisResult result{};
+        result.phase_coherence = sum / static_cast<float>(history_coherence_.size());
+        result.high_freq_anomaly = lf_energy > 0.0f ? hf_energy / lf_energy : 0.0f;
+        result.noise_floor = lf_energy / static_cast<float>(bins);
+        result.splice_flag = result.high_freq_anomaly * sensitivity > anomalyGate &&
+                             result.phase_coherence < 0.50f;
+        return result;
     }
-
 private:
     double sample_rate_;
-    size_t fft_size_;
-    size_t hop_size_;
-    size_t write_pos_;
-    size_t read_pos_;
-    std::vector<float> input_buffer_;
-    std::vector<float> fft_window_;
-    std::vector<float> prev_phases_;
-    std::array<float, 16> history_coherence_;
+    size_t fft_size_, hop_size_, write_pos_, read_pos_, available_samples_;
+    std::array<float, 16384> input_buffer_{};
+    std::array<float, 512> fft_window_{};
+    std::array<float, 257> prev_phases_{};
+    std::array<float, 16> history_coherence_{};
     size_t history_index_;
 };
 
 // ============================================================================
 // 4. PLATT-SCALED EVIDENCE FUSION METAMODEL
+
 // ============================================================================
 
 class EvidenceFusionEngine {
