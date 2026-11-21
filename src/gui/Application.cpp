@@ -31,6 +31,9 @@ struct Application::AudioStreamHandle
     PaStream* stream = nullptr;
 #endif
     bool active = false;
+#if defined(DAWCHECKER_HAVE_PORTAUDIO)
+    bool portAudioInitialized = false;
+#endif
 
     // Demo-signal fallback state, used only when no real input device is
     // available (e.g. running in a sandboxed/headless environment). This
@@ -135,37 +138,67 @@ void Application::shutdownWindow()
 void Application::startAudio()
 {
 #if defined(DAWCHECKER_HAVE_PORTAUDIO)
+    if (!audioStream_ || audioStream_->portAudioInitialized || audioStream_->active)
+        return;
     if (Pa_Initialize() != paNoError)
         return;
+    audioStream_->portAudioInitialized = true;
+
+    const PaDeviceIndex device = Pa_GetDefaultInputDevice();
+    if (device == paNoDevice) {
+        Pa_Terminate();
+        audioStream_->portAudioInitialized = false;
+        return;
+    }
+    const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(device);
+    if (deviceInfo == nullptr) {
+        Pa_Terminate();
+        audioStream_->portAudioInitialized = false;
+        return;
+    }
 
     PaStreamParameters inputParams{};
-    inputParams.device = Pa_GetDefaultInputDevice();
-    if (inputParams.device == paNoDevice)
-        return;
-
+    inputParams.device = device;
     inputParams.channelCount = 1;
     inputParams.sampleFormat = paFloat32;
-    inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
+    inputParams.suggestedLatency = deviceInfo->defaultLowInputLatency;
 
-    PaError err = Pa_OpenStream(&audioStream_->stream, &inputParams, nullptr, sampleRate_,
-                                 256, paClipOff, paCallback, this);
-    if (err == paNoError)
-    {
-        Pa_StartStream(audioStream_->stream);
-        audioStream_->active = true;
+    const PaError openError = Pa_OpenStream(&audioStream_->stream, &inputParams, nullptr,
+                                             sampleRate_, 256, paClipOff, paCallback, this);
+    if (openError != paNoError) {
+        audioStream_->stream = nullptr;
+        Pa_Terminate();
+        audioStream_->portAudioInitialized = false;
+        return;
     }
+
+    const PaError startError = Pa_StartStream(audioStream_->stream);
+    if (startError != paNoError) {
+        Pa_CloseStream(audioStream_->stream);
+        audioStream_->stream = nullptr;
+        Pa_Terminate();
+        audioStream_->portAudioInitialized = false;
+        return;
+    }
+    audioStream_->active = true;
 #endif
 }
 
 void Application::stopAudio()
 {
 #if defined(DAWCHECKER_HAVE_PORTAUDIO)
-    if (audioStream_ && audioStream_->active && audioStream_->stream)
-    {
-        Pa_StopStream(audioStream_->stream);
+    if (!audioStream_)
+        return;
+    if (audioStream_->stream != nullptr) {
+        if (audioStream_->active)
+            Pa_StopStream(audioStream_->stream);
         Pa_CloseStream(audioStream_->stream);
+        audioStream_->stream = nullptr;
+    }
+    audioStream_->active = false;
+    if (audioStream_->portAudioInitialized) {
         Pa_Terminate();
-        audioStream_->active = false;
+        audioStream_->portAudioInitialized = false;
     }
 #endif
 }
