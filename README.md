@@ -1,146 +1,127 @@
-# DawChecker Secure Ultimate
+# StackAlign
 
-**DawChecker is an audio-forensics application with a VST3 plugin component.** It combines a standalone C++20 desktop application and analysis core with a Steinberg VST3 effect for use inside compatible audio workstations. The repository also contains separate developer and Linux server-protection utilities; those are not part of the audio-processing runtime.
+**A guarded Bash toolkit for Linux host inspection and carefully gated administration.**
 
-The project is intended to help engineers and forensic examiners inspect audio characteristics and preserve useful integrity evidence. Its outputs are analytical indicators, not proof that a recording is authentic, manipulated, or suitable for a legal conclusion without independent examination.
+StackAlign is an experimental project for EL-family Linux systems. It provides a command-line interface, shell modules, tests, and operational documentation. Its current scope is intentionally conservative: inspect first, produce plans before changes, and keep high-risk operations blocked until their safety and recovery contracts are implemented and validated.
 
-## Project components
+> [!WARNING]
+> **Experimental beta — not production-ready.** Use disposable virtual machines or containers only. Do not run this project on production hosts or systems containing important data or real credentials. Passing unit tests or CI does not establish safe real-host operation.
 
-| Component | Location | Purpose |
-| --- | --- | --- |
-| Standalone application and core | `src/`, `CMakeLists.txt` | C++20 analysis engine, desktop GUI, device support, and tests |
-| Steinberg VST3 component | `Source/dawchecker_vst3.cpp`, `latest/dawchecker_vst3.cpp` | In-DAW audio effect and forensic feature analysis |
-| SHA-256 implementation | `src/core/ForensicHash.cpp`, `src/core/ForensicHash.h` | File/data digest using OpenSSL EVP |
-| Automated tests | `tests/` | Core behavior and SHA-256 test coverage |
-| Technical documentation | `docs/` | Architecture, security notes, and operational reference |
-| Server protection utilities | `tools/server-protection/` | Separate Linux host hardening and CSF management tools |
-| Clipboard MCP companion | `tools/clipboard-mcp/` | Optional, separate developer utility |
+## Safety principles
 
-## VST3 component and Steinberg SDK
+- Mutating workflows require explicit opt-in where implemented; plan/read-only modes are preferred.
+- No hidden telemetry, remote configuration, or automatic network bootstrap.
+- Secrets must not be committed, logged, or passed in process arguments.
+- Preserve repository history. Use focused branches and pull requests; do not force-push.
+- Distinguish implemented behavior, mock-test coverage, CI evidence, and real-host acceptance.
+- Block destructive or security-sensitive workflows when prerequisites and rollback guarantees are absent.
 
-The VST3 component is implemented against the **Steinberg VST3 SDK**. Its source includes Steinberg's VST3 processor, factory, parameter-change, process-context, and base-string interfaces. The processor uses the single-component effect model (`SingleComponentEffect`) and registers stereo audio input/output buses and three parameters:
+## Current capabilities
 
-- Detection Sensitivity
-- Evidence Calibration Ceiling
-- Anti-Forensic Mitigation Gate
+| Area | Current state | Important limitation |
+|---|---|---|
+| CLI and host diagnostics | Version/help, read-only doctor, planning, and subsystem commands | Some recognized commands remain stubs or explicitly gated. |
+| EL9 LEMP bootstrap | Plan/apply path for distribution-packaged Nginx, MariaDB, and PHP-FPM | EL9 x86_64 scope; experimental and not production-validated. |
+| Hosting and vhosts | Read-only Nginx/Apache inventory and diagnostics; hosting plans | Site lifecycle and independent-tenant isolation remain gated. |
+| Database | Read-only inventory and guarded database creation | User grants and destructive drop are not implemented. |
+| Backups | Logical/physical backup creation, listing, and limited artifact checks | Restore, encryption, retention, off-host replication, and disaster recovery remain gated. |
+| TLS | Read-only certificate status, client inventory, and renewal-scheduler preflight | Issuance, renewal, migration, and scheduler activation remain blocked. |
+| Credential preflight | MySQL defaults-file checks require an absolute canonical path, regular non-symlink file, owner match, and mode 400 or 600 | Does not replace a real-host credential and recovery review. |
+| Egress and SFTP | Guarded modules and fixture/integration test paths | Real-kernel firewall behavior and real-host SFTP acceptance remain unverified. |
+| Oracle Linux migration | Guarded legacy conversion/update wrapper | Fake-tool tests only; live conversion and update have not been validated. |
 
-The plugin source is in `Source/dawchecker_vst3.cpp`; `latest/dawchecker_vst3.cpp` is the corresponding maintained snapshot. The Steinberg SDK is an external build dependency and is not vendored in this repository.
+The TLS clock gate requires `timedatectl` to report `NTPSynchronized=yes` before TLS preflight or Certbot HTTP-01 planning proceeds. It reports timezone separately and does not change system time, enable NTP, or modify timezone settings. See [TLS clock preflight](docs/TLS-CLOCK-PREFLIGHT.md).
 
-**Build-system distinction:** the top-level `CMakeLists.txt` configures the standalone application/core and `engine_tests`. It does not itself declare the VST3 plugin target. Build the VST3 component through the SDK-aware plugin build configuration used for the plugin deliverable, with the Steinberg SDK available. Do not interpret a successful standalone CMake build as a VST3 build, or vice versa.
-
-## Audio analysis
-
-The VST3 source contains a frame-based feature pipeline with a 512-sample analysis frame and 128-sample hop. It calculates spectral magnitudes and phase changes, tracks a short coherence history, and derives high-frequency and noise-floor indicators. The current reference implementation uses a direct discrete Fourier transform loop; it should not be described as an FFTW/IPP-backed or optimized FFT implementation.
-
-The plugin also contains a logistic evidence-fusion calculation using fixed coefficients and an evidence-graph data structure. These calculations are implementation-level indicators, not a validated forensic probability model. The repository does not establish courtroom admissibility, scientific validation across all codecs/recording chains, or a quantified false-positive/false-negative rate.
-
-The standalone core includes modular analysis and utility code, including:
-
-- Electric Network Frequency (ENF) analysis
-- Ultrasonic content inspection
-- Watermark-pattern detection
-- Optional signal neutralization stages
-- Codec/device identification helpers
-- Checked arithmetic, export-path checks, and secure buffer-zeroing helpers
-
-Neutralization changes audio. Preserve an untouched source and document any processing performed on an evidentiary copy.
-
-## SHA-256 and integrity
-
-The shared forensic hash implementation uses OpenSSL's EVP interface to calculate SHA-256. The VST3 adapter delegates to this shared implementation.
-
-A SHA-256 digest can identify data and help detect whether bytes have changed when compared with a trusted digest. **A digest is not a digital signature**: by itself it does not identify who created a file, prove when it was created, or establish that its contents are authentic. Preserve the original media, record the tool/build version, and protect the reference digest separately.
-
-The standalone hardened build script can emit a SHA-256 sidecar for the built executable when a compatible hash utility is available.
+TLS issuance and renewal remain blocked because protected secret transport, atomic certificate/key activation, crash recovery, scheduler isolation, and real-host acceptance are not yet established. A plan preview is not certificate issuance.
 
 ## Requirements
 
-### Standalone application and core
+- Bash on GNU/Linux
+- `make`
+- Python 3 for the complete test suite
+- EL9 x86_64 for the experimental LEMP apply path
+- Root only for operations that explicitly require privileged apply
 
-- C++20 compiler
-- CMake 3.16 or newer
-- OpenGL development libraries
-- Threads
-- OpenSSL Crypto development libraries (mandatory by default for the SHA-256 acceptance build)
-- Dear ImGui sources under `third_party/imgui` to build the GUI
-- GLFW for the GUI target
-- PortAudio is optional; without it, the application can build without live PortAudio input
+Ubuntu is used for CI; it is not currently a supported LEMP deployment target.
 
-The top-level build may skip the GUI when Dear ImGui is absent; the core library and tests are still configured. If ImGui is present but GLFW is unavailable, CMake stops with a dependency error.
+## Quick start
 
-### VST3 component
-
-- Steinberg VST3 SDK
-- A compatible C++20 compiler/toolchain
-- The OpenSSL Crypto dependency required by the shared SHA-256 implementation
-
-The SDK is not included in this repository. Use the SDK-aware plugin build setup for the VST3 artifact.
-
-## Build the standalone application and tests
-
-On a Linux system with the dependencies installed:
+Inspect the CLI without applying changes:
 
 ```bash
-# Optional: vendor the pinned Dear ImGui source used by the GUI build
-./scripts/vendor_imgui.sh
-
-# Configure and build the standalone targets
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-
-# Run the registered tests
-ctest --test-dir build --output-on-failure
+bash bin/stackalign version
+bash bin/stackalign help
+bash bin/stackalign doctor
 ```
 
-Or use the hardened build helper:
+Inspect read-only plans:
 
 ```bash
-chmod +x scripts/build_hardened.sh
-./scripts/build_hardened.sh
+bash bin/stackalign hosting plan nginx
+bash bin/stackalign hosting plan apache
+bash bin/stackalign hosting plan hybrid
+bash bin/stackalign tls status
+bash bin/stackalign tls preflight
 ```
 
-The helper vendors ImGui, configures the standalone CMake project, builds, runs CTest, and performs best-effort ELF hardening checks on Linux. If the GUI dependencies are unavailable, it can complete with the core and tests while reporting that the GUI executable was skipped.
+The LEMP installer is plan-first. Review its output and [LEMP beta guide](docs/LEMP-BETA.md) before considering an explicitly mutating apply:
 
-### Relevant CMake options
+```bash
+sudo bash bin/stackalign install
+sudo bash bin/stackalign install --apply
+```
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `DAWCHECKER_USE_PORTAUDIO` | `ON` | Attempt to enable PortAudio input when installed |
-| `DAWCHECKER_REQUIRE_CRYPTO` | `ON` | Require OpenSSL Crypto and build the SHA-256 library/tests |
-| `IMGUI_DIR` | `third_party/imgui` | Location of the Dear ImGui source tree |
+Do not run apply on a production host.
 
-To explicitly disable the mandatory crypto dependency for a local standalone configuration, pass `-DDAWCHECKER_REQUIRE_CRYPTO=OFF`. That configuration is not suitable for the crypto acceptance gate or for a build that requires the SHA-256 component.
+## Database credential file
 
-## Tests and verification
+Database commands that need client credentials use a MySQL defaults file rather than a password argument. Set `SA_MYSQL_DEFAULTS_FILE` to an absolute canonical path. The file must be a regular readable non-symlink file, owned by the invoking effective user, with permissions `400` or `600`.
 
-The standalone test executable is `engine_tests`, registered with CTest. The test suite includes core engine checks and SHA-256 known-answer tests when the crypto option is enabled.
+```bash
+export SA_MYSQL_DEFAULTS_FILE=/etc/stackalign/mysql-admin.cnf
+bash bin/stackalign db status
+bash bin/stackalign db list
+```
 
-The repository also defines GitHub Actions workflows for the crypto acceptance gate and server-protection API security tests. A passing workflow proves only the checks actually executed by that workflow at the commit it tested. It does not, by itself, prove real-world forensic accuracy, complete real-time safety, compatibility with every DAW, or correctness on every supported operating system.
+Keep the file outside the repository. Do not put credentials in shell history, command-line arguments, test output, or commits.
 
-For the VST3 deliverable, verify the SDK-backed plugin build and load the resulting plugin in a compatible VST3 host. Keep that verification distinct from the standalone CMake/CTest results.
+## Development and tests
 
-## Security and operating boundaries
+Run the standard checks:
 
-- The audio application is designed to operate without telemetry or a license-server dependency.
-- The server-protection toolkit is a separate Linux administration component. It has its own privileged operations and network behavior; it is not linked into the audio application.
-- Do not expose the server-protection dashboard/API directly to the public internet. Review its documentation and bind/configuration requirements before deployment.
-- Build hardening flags reduce selected classes of risk; they do not make software invulnerable.
-- The startup security checks are informational. They are not a substitute for operating-system security controls or a formal security assessment.
+```bash
+make lint
+make headers
+make test
+```
 
-## Repository documentation
+- `make lint` runs Bash syntax checks and ShellCheck when installed.
+- `make headers` checks configured SPDX/author headers.
+- `make test` runs the shell test suites and Python tuning tests.
+- A failure in any suite means the overall test run is not green.
 
-- [Technical reference](docs/TECHNICAL_REFERENCE.md)
-- [Security hardening notes](docs/HARDENING.md)
-- [Server protection toolkit](tools/server-protection/README.md)
-- [Clipboard MCP companion](tools/clipboard-mcp/README.md)
+CI workflows cover Ubuntu, AlmaLinux 9, and CentOS Stream 9 fixture environments. CI is revision-specific evidence, not proof of successful deployment, live package transactions, firewall behavior, recovery, or production readiness. Report checks as **PASS**, **FAIL**, **NOT RUN**, or **UNVERIFIED** and identify the exact commit/environment.
 
-## License and attribution
+## Documentation
 
-Licensed under the MIT License; see [LICENSE](LICENSE).
+- [LEMP beta guide](docs/LEMP-BETA.md) — supported scope, apply behavior, and recovery limitations.
+- [Beta hosting scope](docs/BETA-SCOPE-AND-HOSTING.md) — vhosts, hosting modes, and isolation boundaries.
+- [Hosting modes](docs/HOSTING-MODES.md) — Nginx, Apache, and hybrid plans.
+- [Internet access](docs/INTERNET-ACCESS.md) — access preferences and planning boundaries.
+- [TLS client design](docs/TLS-CLIENTS.md) — client/lineage ownership and orchestration limits.
+- [TLS clock preflight](docs/TLS-CLOCK-PREFLIGHT.md) — synchronized-clock gate and validation scope.
+- [Egress controls](docs/EGRESS.md) — opt-in firewall policy and passive LAN inspection.
+- [Release trust](docs/RELEASE-TRUST.md) — signature and artifact verification boundaries.
+- [Oracle Linux migration](docs/ORACLE-LINUX-MIGRATION.md) — guarded legacy migration/update wrapper.
+- [Security architecture comparison](docs/SECURITY-ARCHITECTURE-COMPARISON.md) — control and acceptance policy.
+- [Clean-room provenance audit](docs/design/clean-room-provenance-audit.md) — outstanding provenance evidence; not a legal opinion.
 
-**Developer:** Lewis James Seals Jr.  
-**Organization:** TheRealla Audio Forensic Labs
+## Contributing
 
----
+Use a focused branch and submit a pull request. Preserve existing history; do not force-push or bypass review/CI protections. Include reproducible commands, full relevant output, exit status, OS/release/kernel/architecture, and whether the environment is disposable. Remove all credentials and sensitive host details from reports.
 
-*DawChecker is decision-support software. Preserve original recordings and maintain independent case notes, acquisition records, and chain-of-custody controls. Do not present automated scores or digests as standalone proof of authenticity or tampering.*
+Do not describe a feature as complete until the implementation and required validation evidence are present.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
