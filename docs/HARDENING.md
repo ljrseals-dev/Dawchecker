@@ -16,8 +16,8 @@ application's control: the binary itself, and its own runtime behavior.
 
 ## Build-time (compiler/linker) hardening
 
-Configured centrally in `CMakeLists.txt`'s `hardening_flags` target and
-applied to every target in the project:
+Configured centrally in `CMakeLists.txt` and applied through the directory-wide
+compile/link options to targets created by the top-level standalone build:
 
 | Mitigation | GCC/Clang flag | MSVC flag | What it stops |
 |---|---|---|---|
@@ -27,7 +27,7 @@ applied to every target in the project:
 | Position-independent exec | `-fPIE -pie` | `/DYNAMICBASE` | Makes ASLR effective for the main binary |
 | Full RELRO | `-Wl,-z,relro -Wl,-z,now` | — | GOT-overwrite exploitation |
 | Non-executable stack | `-Wl,-z,noexecstack` | `/NXCOMPAT` | Stack-based shellcode execution |
-| Control-flow integrity | `-fcf-protection=full` (Intel CET) | `/guard:cf`, `/CETCOMPAT` | ROP/JOP-style control-flow hijacking |
+| Control-flow integrity | `-fcf-protection=full` (when supported) | `/GUARD:CF` | Selected control-flow hijacking mitigations |
 | High-entropy ASLR | (default on 64-bit) | `/HIGHENTROPYVA` | Address-guessing attacks |
 | Format-string safety | `-Wformat -Werror=format-security` | `/W4` | `printf`-family format-string bugs |
 | Spectre v1 mitigation | — | `/Qspectre` | Speculative-execution side channels |
