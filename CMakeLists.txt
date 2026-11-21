@@ -54,9 +54,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options(-D_FORTIFY_SOURCE=2)
     endif()
 
-    # Apply ELF hardening at link time as well as compile time. These options
-    # are supported by the GNU/Clang ELF toolchains targeted by this branch.
-    add_link_options(-pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+    # ELF-specific linker hardening; do not pass GNU ld flags to Apple ld.
+    if(UNIX AND NOT APPLE)
+        add_link_options(-pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+    endif()
 
     # Release-specific optimization.
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2 -DNDEBUG")
