@@ -49,8 +49,9 @@ void fft(std::vector<std::complex<float>>& a)
 
 void SpectrumView::pushSample(float liveSample) noexcept
 {
-    const std::size_t idx = writeIndex_.fetch_add(1, std::memory_order_relaxed) % kFftSize;
-    ring_[idx] = liveSample;
+    const std::size_t next = writeIndex_.load(std::memory_order_relaxed);
+    ring_[next % kFftSize].store(liveSample, std::memory_order_relaxed);
+    writeIndex_.store(next + 1, std::memory_order_release);
 }
 
 void SpectrumView::render(double markerHzWatermark, double markerHzEnf, double markerHzUltrasonic, double sampleRate)
@@ -59,14 +60,13 @@ void SpectrumView::render(double markerHzWatermark, double markerHzEnf, double m
 
     std::vector<std::complex<float>> buffer(kFftSize);
     {
-        std::lock_guard<std::mutex> lock(copyMutex_);
-        const std::size_t start = writeIndex_.load(std::memory_order_relaxed) % kFftSize;
+        const std::size_t start = writeIndex_.load(std::memory_order_acquire) % kFftSize;
         for (std::size_t i = 0; i < kFftSize; ++i)
         {
             // Hann window to reduce spectral leakage in the display.
             const float w = 0.5f - 0.5f * std::cos(2.0f * static_cast<float>(M_PI) * static_cast<float>(i) /
                                                      static_cast<float>(kFftSize - 1));
-            buffer[i] = ring_[(start + i) % kFftSize] * w;
+            buffer[i] = ring_[(start + i) % kFftSize].load(std::memory_order_relaxed) * w;
         }
     }
     fft(buffer);
