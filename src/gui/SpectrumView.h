@@ -1,7 +1,6 @@
 #pragma once
 #include <array>
 #include <atomic>
-#include <mutex>
 #include <vector>
 
 namespace dawchecker::gui {
@@ -18,9 +17,8 @@ public:
     void render(double markerHzWatermark, double markerHzEnf, double markerHzUltrasonic, double sampleRate);
 
 private:
-    std::array<float, kFftSize> ring_{};
+    std::array<std::atomic<float>, kFftSize> ring_{};
     std::atomic<std::size_t> writeIndex_{0};
-    std::mutex copyMutex_;
 };
 
 } // namespace dawchecker::gui
